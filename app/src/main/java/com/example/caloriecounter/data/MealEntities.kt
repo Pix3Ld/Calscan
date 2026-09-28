@@ -30,5 +30,13 @@ data class MealSummaryEntity(
     val createdAt: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "photo_history")
+data class PhotoHistoryEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val imageBytes: ByteArray,
+    val note: String? = null,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
 enum class InputType { PHOTO, TEXT }
 enum class JobStatus { QUEUED, PROCESSING, COMPLETED, FAILED }

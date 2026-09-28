@@ -25,4 +25,13 @@ interface MealDao {
 
     @Query("DELETE FROM meal_summaries WHERE id = :summaryId")
     suspend fun deleteSummary(summaryId: Long)
+
+    @Insert
+    suspend fun insertPhotoHistory(photo: PhotoHistoryEntity): Long
+
+    @Query("SELECT * FROM photo_history ORDER BY createdAt DESC")
+    fun observePhotoHistory(): Flow<List<PhotoHistoryEntity>>
+
+    @Query("DELETE FROM photo_history WHERE id = :photoId")
+    suspend fun deletePhotoHistory(photoId: Long)
 }

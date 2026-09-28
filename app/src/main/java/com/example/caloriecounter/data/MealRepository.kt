@@ -5,6 +5,17 @@ import kotlinx.coroutines.flow.Flow
 class MealRepository(private val dao: MealDao) {
     fun observeSummaries(): Flow<List<MealSummaryEntity>> = dao.observeSummaries()
 
+    fun observePhotoHistory(): Flow<List<PhotoHistoryEntity>> = dao.observePhotoHistory()
+
+    suspend fun savePhoto(imageBytes: ByteArray, note: String?): Long {
+        require(imageBytes.isNotEmpty()) { "Image cannot be empty" }
+        return dao.insertPhotoHistory(
+            PhotoHistoryEntity(imageBytes = imageBytes, note = note?.trim()?.takeIf { it.isNotEmpty() })
+        )
+    }
+
+    suspend fun deletePhoto(photoId: Long) = dao.deletePhotoHistory(photoId)
+
     suspend fun enqueueText(text: String): Long {
         require(text.isNotBlank()) { "Text input cannot be blank" }
         return dao.insertJob(AnalysisJobEntity(inputType = InputType.TEXT, textInput = text.trim()))

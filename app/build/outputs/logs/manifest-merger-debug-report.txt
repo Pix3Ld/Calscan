@@ -43,6 +43,7 @@ MERGED from [androidx.room:room-ktx:2.6.1] C:\Users\deadp\.gradle\caches\8.14.5\
 MERGED from [androidx.sqlite:sqlite-framework:2.4.0] C:\Users\deadp\.gradle\caches\8.14.5\transforms\c002fa71d1319b72e3e3a522fc4c4477\transformed\sqlite-framework-2.4.0\AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.sqlite:sqlite:2.4.0] C:\Users\deadp\.gradle\caches\8.14.5\transforms\0597ca4e1656ae6f619bd8d43571e8bd\transformed\sqlite-2.4.0\AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.annotation:annotation-experimental:1.3.0] C:\Users\deadp\.gradle\caches\8.14.5\transforms\90b2947b750bc207a534ec8b2cf16130\transformed\jetified-annotation-experimental-1.3.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.exifinterface:exifinterface:1.3.7] C:\Users\deadp\.gradle\caches\8.14.5\transforms\dd4a99d6557dd0fd758fc43c2a8c0ec0\transformed\exifinterface-1.3.7\AndroidManifest.xml:17:1-24:12
 MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\deadp\.gradle\caches\8.14.5\transforms\81bc23fe121213a81ba8007edf6835ed\transformed\cursoradapter-1.0.0\AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.cardview:cardview:1.0.0] C:\Users\deadp\.gradle\caches\8.14.5\transforms\85eb983ba324298438493987c21aae05\transformed\cardview-1.0.0\AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\deadp\.gradle\caches\8.14.5\transforms\00cc215b7d64cc0693646cad44481148\transformed\core-runtime-2.2.0\AndroidManifest.xml:17:1-22:12
@@ -199,6 +200,8 @@ MERGED from [androidx.sqlite:sqlite:2.4.0] C:\Users\deadp\.gradle\caches\8.14.5\
 MERGED from [androidx.sqlite:sqlite:2.4.0] C:\Users\deadp\.gradle\caches\8.14.5\transforms\0597ca4e1656ae6f619bd8d43571e8bd\transformed\sqlite-2.4.0\AndroidManifest.xml:20:5-44
 MERGED from [androidx.annotation:annotation-experimental:1.3.0] C:\Users\deadp\.gradle\caches\8.14.5\transforms\90b2947b750bc207a534ec8b2cf16130\transformed\jetified-annotation-experimental-1.3.0\AndroidManifest.xml:20:5-44
 MERGED from [androidx.annotation:annotation-experimental:1.3.0] C:\Users\deadp\.gradle\caches\8.14.5\transforms\90b2947b750bc207a534ec8b2cf16130\transformed\jetified-annotation-experimental-1.3.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.exifinterface:exifinterface:1.3.7] C:\Users\deadp\.gradle\caches\8.14.5\transforms\dd4a99d6557dd0fd758fc43c2a8c0ec0\transformed\exifinterface-1.3.7\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.exifinterface:exifinterface:1.3.7] C:\Users\deadp\.gradle\caches\8.14.5\transforms\dd4a99d6557dd0fd758fc43c2a8c0ec0\transformed\exifinterface-1.3.7\AndroidManifest.xml:20:5-22:41
 MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\deadp\.gradle\caches\8.14.5\transforms\81bc23fe121213a81ba8007edf6835ed\transformed\cursoradapter-1.0.0\AndroidManifest.xml:20:5-44
 MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\deadp\.gradle\caches\8.14.5\transforms\81bc23fe121213a81ba8007edf6835ed\transformed\cursoradapter-1.0.0\AndroidManifest.xml:20:5-44
 MERGED from [androidx.cardview:cardview:1.0.0] C:\Users\deadp\.gradle\caches\8.14.5\transforms\85eb983ba324298438493987c21aae05\transformed\cardview-1.0.0\AndroidManifest.xml:20:5-44

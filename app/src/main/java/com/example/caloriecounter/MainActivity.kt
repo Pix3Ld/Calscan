@@ -8,29 +8,40 @@ import android.graphics.SurfaceTexture
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.BitmapFactory
+import android.graphics.ImageFormat
+import android.graphics.Matrix
 import android.os.Bundle
 import android.text.InputType
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.Surface
 import android.view.TextureView
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Switch
 import android.widget.TextView
 import android.hardware.camera2.CameraCaptureSession
+import android.hardware.camera2.CaptureFailure
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CaptureRequest
 import android.hardware.camera2.params.StreamConfigurationMap
+import android.media.ImageReader
 import android.os.Handler
 import android.os.HandlerThread
 import android.content.pm.PackageManager
 import android.util.Size
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import androidx.exifinterface.media.ExifInterface
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -38,6 +49,14 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
+import com.example.caloriecounter.data.DatabaseProvider
+import com.example.caloriecounter.data.MealRepository
+import com.example.caloriecounter.data.PhotoHistoryEntity
+import kotlinx.coroutines.launch
+import java.io.ByteArrayInputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
@@ -74,7 +93,19 @@ class MainActivity : AppCompatActivity() {
     private var cameraThread: HandlerThread? = null
     private var cameraHandler: Handler? = null
     private var cameraTexture: TextureView? = null
+    private var photoImageReader: ImageReader? = null
     private var scanDetailsInputLayout: TextInputLayout? = null
+    private var scanDetailsEditText: TextInputEditText? = null
+    private var cameraPlaceholder: Button? = null
+    private var captureButton: Button? = null
+    private var historyContentContainer: LinearLayout? = null
+    private var photoHistory: List<PhotoHistoryEntity> = emptyList()
+    private var cameraEnabled = true
+    private var pendingPhotoNote: String? = null
+    private var currentPage = Page.HOME
+    private val mealRepository by lazy {
+        MealRepository(DatabaseProvider.get(applicationContext).mealDao())
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -126,6 +157,13 @@ class MainActivity : AppCompatActivity() {
         updateTheme()
         buildChart()
 
+        lifecycleScope.launch {
+            mealRepository.observePhotoHistory().collect { photos ->
+                photoHistory = photos
+                if (currentPage == Page.HISTORY) renderPhotoHistory(photos)
+            }
+        }
+
         bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.nav_home -> showPage(Page.HOME)
@@ -144,8 +182,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == CAMERA_PERMISSION_REQUEST && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
-            if (cameraTexture?.isAvailable == true) openCamera()
+        if (requestCode == CAMERA_PERMISSION_REQUEST) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+                if (cameraEnabled && cameraTexture?.isAvailable == true) openCamera()
+            } else {
+                cameraEnabled = false
+                cameraTexture?.visibility = View.GONE
+                cameraPlaceholder?.visibility = View.VISIBLE
+            }
         }
     }
 
@@ -154,6 +198,10 @@ class MainActivity : AppCompatActivity() {
     private fun showPage(page: Page): Boolean {
         closeCamera()
         scanDetailsInputLayout = null
+        scanDetailsEditText = null
+        cameraPlaceholder = null
+        cameraEnabled = true
+        currentPage = page
         if (page == Page.HOME) {
             pageContainer.visibility = View.GONE
             homeContentViews.forEach { it.visibility = View.VISIBLE }
@@ -186,7 +234,7 @@ class MainActivity : AppCompatActivity() {
         val intro = pageText(getString(R.string.scan_page_intro), 16f, true)
         pageContainer.addView(intro)
 
-        cameraTexture = object : TextureView(this) {
+        val cameraFrame = object : FrameLayout(this) {
             override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
                 val width = MeasureSpec.getSize(widthMeasureSpec)
                 val maxHeight = MeasureSpec.getSize(heightMeasureSpec)
@@ -199,33 +247,63 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 setMeasuredDimension(measuredWidth, measuredHeight)
+                measureChildren(
+                    MeasureSpec.makeMeasureSpec(measuredWidth, MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(measuredHeight, MeasureSpec.EXACTLY)
+                )
             }
         }.apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { setMargins(0, 16.dp(), 0, 16.dp()) }
+            setBackgroundColor(Color.BLACK)
+        }
+        cameraTexture = TextureView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
             isOpaque = true
             surfaceTextureListener = object : TextureView.SurfaceTextureListener {
-                override fun onSurfaceTextureAvailable(surface: android.graphics.SurfaceTexture, width: Int, height: Int) = openCamera()
+                override fun onSurfaceTextureAvailable(surface: android.graphics.SurfaceTexture, width: Int, height: Int) {
+                    if (cameraEnabled) openCamera()
+                }
                 override fun onSurfaceTextureSizeChanged(surface: android.graphics.SurfaceTexture, width: Int, height: Int) = Unit
-                override fun onSurfaceTextureDestroyed(surface: android.graphics.SurfaceTexture): Boolean { closeCamera(); return true }
+                override fun onSurfaceTextureDestroyed(surface: android.graphics.SurfaceTexture): Boolean {
+                    if (cameraTexture?.surfaceTexture === surface) closeCamera()
+                    return true
+                }
                 override fun onSurfaceTextureUpdated(surface: android.graphics.SurfaceTexture) = Unit
             }
         }
-        pageContainer.addView(cameraTexture)
+        cameraFrame.addView(cameraTexture)
+        cameraPlaceholder = Button(this).apply {
+            text = getString(R.string.camera_enable_button)
+            isAllCaps = false
+            visibility = View.GONE
+            setOnClickListener { enableCameraPreview() }
+        }
+        cameraFrame.addView(cameraPlaceholder, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.CENTER
+        ))
+        pageContainer.addView(cameraFrame)
 
         val scanButton = Button(this).apply {
             text = getString(R.string.scan_button)
             isAllCaps = false
             textSize = 18f
             minHeight = 64.dp()
+            isEnabled = false
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 64.dp()
             ).apply { setMargins(0, 8.dp(), 0, 12.dp()) }
-            setOnClickListener { }
+            setOnClickListener { capturePhoto() }
         }
+        captureButton = scanButton
         pageContainer.addView(scanButton)
 
         val detailsInput = TextInputLayout(this).apply {
@@ -242,6 +320,17 @@ class MainActivity : AppCompatActivity() {
                 minLines = 1
                 maxLines = 2
                 setPadding(0, 8.dp(), 0, 8.dp())
+                scanDetailsEditText = this
+                setOnFocusChangeListener { _, hasFocus ->
+                    if (hasFocus) disableCameraForNote()
+                }
+                addTextChangedListener(object : TextWatcher {
+                    override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                    override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) {
+                        if (!text.isNullOrEmpty()) disableCameraForNote()
+                    }
+                    override fun afterTextChanged(editable: Editable?) = Unit
+                })
             })
         }
         scanDetailsInputLayout = detailsInput
@@ -255,22 +344,71 @@ class MainActivity : AppCompatActivity() {
 
     private fun buildHistoryPage() {
         pageContainer.addView(pageText(getString(R.string.history_page_intro), 16f, true))
-        listOf(
-            "Dzisiaj, 12:40" to "Owsianka z owocami · 520 kcal",
-            "Dzisiaj, 08:15" to "Jajka i pieczywo · 410 kcal",
-            "Wczoraj, 19:05" to "Makaron z warzywami · 680 kcal"
-        ).forEach { (time, meal) ->
+        val scrollView = android.widget.ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        }
+        historyContentContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        scrollView.addView(historyContentContainer)
+        pageContainer.addView(scrollView)
+        renderPhotoHistory(photoHistory)
+    }
+
+    private fun renderPhotoHistory(photos: List<PhotoHistoryEntity>) {
+        val container = historyContentContainer ?: return
+        container.removeAllViews()
+        if (photos.isEmpty()) {
+            container.addView(pageText(getString(R.string.history_empty), 15f, false).apply {
+                setPadding(0, 24.dp(), 0, 0)
+            })
+            return
+        }
+
+        photos.forEach { photo ->
             val row = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(16.dp(), 14.dp(), 16.dp(), 14.dp())
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(10.dp(), 10.dp(), 8.dp(), 10.dp())
                 background = ColorDrawable(if (isDarkTheme) Color.parseColor("#1F2937") else Color.WHITE)
-                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                    setMargins(0, 12.dp(), 0, 0)
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(0, 12.dp(), 0, 0) }
+            }
+            val thumbnail = ImageView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(76.dp(), 76.dp())
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setImageBitmap(decodeOrientedPhoto(photo.imageBytes))
+                contentDescription = getString(R.string.history_photo_content_description)
+            }
+            row.addView(thumbnail)
+
+            val details = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                    .apply { setMargins(12.dp(), 0, 4.dp(), 0) }
+            }
+            details.addView(pageText(
+                SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(photo.createdAt)),
+                12f,
+                false
+            ))
+            details.addView(pageText(photo.note ?: getString(R.string.history_photo_default), 15f, true))
+            row.addView(details)
+
+            val deleteButton = ImageButton(this).apply {
+                setImageResource(android.R.drawable.ic_menu_delete)
+                contentDescription = getString(R.string.history_delete)
+                background = ColorDrawable(Color.TRANSPARENT)
+                setOnClickListener {
+                    lifecycleScope.launch { mealRepository.deletePhoto(photo.id) }
                 }
             }
-            row.addView(pageText(time, 12f, false))
-            row.addView(pageText(meal, 16f, true))
-            pageContainer.addView(row)
+            row.addView(deleteButton, LinearLayout.LayoutParams(44.dp(), 44.dp()))
+            container.addView(row)
         }
     }
 
@@ -296,15 +434,40 @@ class MainActivity : AppCompatActivity() {
         if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
     }
 
+    private fun decodeOrientedPhoto(imageBytes: ByteArray): android.graphics.Bitmap? {
+        val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size) ?: return null
+        val rotationDegrees = try {
+            ExifInterface(ByteArrayInputStream(imageBytes)).rotationDegrees
+        } catch (_: Exception) {
+            0
+        }
+        if (rotationDegrees == 0) return bitmap
+
+        val rotatedBitmap = android.graphics.Bitmap.createBitmap(
+            bitmap,
+            0,
+            0,
+            bitmap.width,
+            bitmap.height,
+            Matrix().apply { postRotate(rotationDegrees.toFloat()) },
+            true
+        )
+        if (rotatedBitmap !== bitmap) bitmap.recycle()
+        return rotatedBitmap
+    }
+
     @SuppressLint("MissingPermission")
     private fun openCamera() {
-        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) return
+        if (!cameraEnabled || checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) return
         val texture = cameraTexture ?: return
         if (!texture.isAvailable || cameraDevice != null || cameraThread != null) return
 
         val manager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
         val cameraId = try {
-            manager.cameraIdList.firstOrNull()
+            manager.cameraIdList.firstOrNull { id ->
+                manager.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING) ==
+                    CameraCharacteristics.LENS_FACING_BACK
+            } ?: manager.cameraIdList.firstOrNull()
         } catch (_: Exception) {
             null
         } ?: return
@@ -315,10 +478,31 @@ class MainActivity : AppCompatActivity() {
 
         cameraThread = HandlerThread("camera").also { it.start() }
         cameraHandler = Handler(cameraThread!!.looper)
+        val jpegSize = getJpegSize(manager, cameraId)
+        if (jpegSize == null) {
+            closeCamera()
+            return
+        }
+        photoImageReader = ImageReader.newInstance(jpegSize.width, jpegSize.height, ImageFormat.JPEG, 2).also { reader ->
+            reader.setOnImageAvailableListener({ imageReader ->
+                val image = try {
+                    imageReader.acquireNextImage()
+                } catch (_: Exception) {
+                    null
+                } ?: return@setOnImageAvailableListener
+                val bytes = try {
+                    val buffer = image.planes[0].buffer
+                    ByteArray(buffer.remaining()).also(buffer::get)
+                } finally {
+                    image.close()
+                }
+                saveCapturedPhoto(bytes, pendingPhotoNote)
+            }, cameraHandler)
+        }
         try {
             manager.openCamera(cameraId, object : CameraDevice.StateCallback() {
                 override fun onOpened(camera: CameraDevice) {
-                    if (!texture.isAvailable || isFinishing || isDestroyed) {
+                    if (cameraTexture !== texture || !texture.isAvailable || !cameraEnabled || isFinishing || isDestroyed) {
                         camera.close()
                         return
                     }
@@ -332,17 +516,30 @@ class MainActivity : AppCompatActivity() {
                         val request = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
                             addTarget(surface)
                         }
-                        camera.createCaptureSession(listOf(surface), object : CameraCaptureSession.StateCallback() {
+                        val imageSurface = photoImageReader?.surface ?: run {
+                            camera.close()
+                            return
+                        }
+                        camera.createCaptureSession(listOf(surface, imageSurface), object : CameraCaptureSession.StateCallback() {
                             override fun onConfigured(session: CameraCaptureSession) {
+                                if (cameraDevice !== camera || !cameraEnabled || isFinishing || isDestroyed) {
+                                    session.close()
+                                    camera.close()
+                                    return
+                                }
                                 cameraSession = session
                                 try {
                                     session.setRepeatingRequest(request.build(), null, cameraHandler)
+                                    runOnUiThread { captureButton?.isEnabled = true }
                                 } catch (_: Exception) {
                                     closeCamera()
                                 }
                             }
                             override fun onConfigureFailed(session: CameraCaptureSession) {
-                                closeCamera()
+                                if (cameraDevice === camera) {
+                                    closeCamera()
+                                    showCameraUnavailable()
+                                }
                             }
                         }, cameraHandler)
                     } catch (_: Exception) {
@@ -352,15 +549,142 @@ class MainActivity : AppCompatActivity() {
                 }
                 override fun onDisconnected(camera: CameraDevice) {
                     camera.close()
-                    cameraDevice = null
+                    if (cameraDevice === camera) {
+                        closeCamera()
+                        showCameraUnavailable()
+                    }
                 }
                 override fun onError(camera: CameraDevice, error: Int) {
                     camera.close()
-                    cameraDevice = null
+                    if (cameraDevice === camera) {
+                        closeCamera()
+                        showCameraUnavailable()
+                    }
                 }
             }, cameraHandler)
         } catch (_: Exception) {
             closeCamera()
+        }
+    }
+
+    private fun getJpegSize(manager: CameraManager, cameraId: String): Size? {
+        val sizes = try {
+            manager.getCameraCharacteristics(cameraId)
+                .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+                ?.getOutputSizes(ImageFormat.JPEG)
+                ?.toList()
+                .orEmpty()
+        } catch (_: Exception) {
+            emptyList()
+        }
+        return sizes.filter { it.width <= 1600 }
+            .maxByOrNull { it.width.toLong() * it.height }
+            ?: sizes.maxByOrNull { it.width.toLong() * it.height }
+    }
+
+    private fun capturePhoto() {
+        val camera = cameraDevice ?: return
+        val session = cameraSession ?: return
+        val reader = photoImageReader ?: return
+        pendingPhotoNote = scanDetailsEditText?.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+        captureButton?.isEnabled = false
+        try {
+            val request = camera.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE).apply {
+                addTarget(reader.surface)
+                set(CaptureRequest.JPEG_ORIENTATION, getJpegOrientation(camera.id))
+            }
+            session.capture(request.build(), object : CameraCaptureSession.CaptureCallback() {
+                override fun onCaptureFailed(
+                    session: CameraCaptureSession,
+                    request: CaptureRequest,
+                    failure: CaptureFailure
+                ) {
+                    runOnUiThread {
+                        captureButton?.isEnabled = cameraEnabled
+                        android.widget.Toast.makeText(
+                            this@MainActivity,
+                            R.string.camera_capture_error,
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            }, cameraHandler)
+        } catch (_: Exception) {
+            captureButton?.isEnabled = cameraEnabled
+            android.widget.Toast.makeText(this, R.string.camera_capture_error, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun saveCapturedPhoto(imageBytes: ByteArray, note: String?) {
+        lifecycleScope.launch {
+            try {
+                mealRepository.savePhoto(imageBytes, note)
+                android.widget.Toast.makeText(
+                    this@MainActivity,
+                    R.string.photo_saved,
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            } catch (_: Exception) {
+                android.widget.Toast.makeText(
+                    this@MainActivity,
+                    R.string.photo_save_error,
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            } finally {
+                captureButton?.isEnabled = cameraEnabled && cameraSession != null
+            }
+        }
+    }
+
+    private fun getJpegOrientation(cameraId: String): Int {
+        val manager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        val characteristics = try {
+            manager.getCameraCharacteristics(cameraId)
+        } catch (_: Exception) {
+            return 0
+        }
+        val sensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: return 0
+        val deviceOrientation = when (windowManager.defaultDisplay.rotation) {
+            Surface.ROTATION_90 -> 90
+            Surface.ROTATION_180 -> 180
+            Surface.ROTATION_270 -> 270
+            else -> 0
+        }
+        val isFrontFacing = characteristics.get(CameraCharacteristics.LENS_FACING) ==
+            CameraCharacteristics.LENS_FACING_FRONT
+        return if (isFrontFacing) {
+            (sensorOrientation + deviceOrientation) % 360
+        } else {
+            (sensorOrientation - deviceOrientation + 360) % 360
+        }
+    }
+
+    private fun disableCameraForNote() {
+        if (!cameraEnabled) return
+        cameraEnabled = false
+        closeCamera()
+        cameraTexture?.visibility = View.GONE
+        cameraPlaceholder?.visibility = View.VISIBLE
+        captureButton?.isEnabled = false
+    }
+
+    private fun enableCameraPreview() {
+        cameraEnabled = true
+        cameraPlaceholder?.visibility = View.GONE
+        cameraTexture?.visibility = View.VISIBLE
+        if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            if (cameraTexture?.isAvailable == true) openCamera()
+        } else {
+            requestPermissions(arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION_REQUEST)
+        }
+    }
+
+    private fun showCameraUnavailable() {
+        runOnUiThread {
+            cameraEnabled = false
+            cameraTexture?.visibility = View.GONE
+            cameraPlaceholder?.visibility = View.VISIBLE
+            captureButton?.isEnabled = false
         }
     }
 
@@ -386,6 +710,9 @@ class MainActivity : AppCompatActivity() {
     private fun closeCamera() {
         cameraSession?.close()
         cameraDevice?.close()
+        photoImageReader?.setOnImageAvailableListener(null, null)
+        photoImageReader?.close()
+        photoImageReader = null
         cameraSession = null
         cameraDevice = null
         cameraThread?.quitSafely()

@@ -4,6 +4,8 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 class DatabaseConverters {
     @TypeConverter
@@ -20,11 +22,21 @@ class DatabaseConverters {
 }
 
 @Database(
-    entities = [AnalysisJobEntity::class, MealSummaryEntity::class],
-    version = 1,
+    entities = [AnalysisJobEntity::class, MealSummaryEntity::class, PhotoHistoryEntity::class],
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(DatabaseConverters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun mealDao(): MealDao
+
+    companion object {
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `photo_history` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `imageBytes` BLOB NOT NULL, `note` TEXT, `createdAt` INTEGER NOT NULL)"""
+                )
+            }
+        }
+    }
 }

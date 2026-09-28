@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">Calorie Counter</string>
-    <string name="title_dashboard">Dashboard</string>
+    <string name="title_dashboard">Home</string>
     <string name="label_today">Dziś</string>
     <string name="label_yesterday">Wczoraj</string>
     <string name="label_week">7 dni</string>
@@ -29,7 +29,15 @@
     <string name="scan_page_intro">Skieruj aparat na posiłek, aby przygotować jego analizę.</string>
     <string name="scan_button">Zrób zdjęcie</string>
     <string name="scan_details_hint">Dodatkowe szczegóły (opcjonalnie)</string>
+    <string name="camera_enable_button">Włącz kamerę</string>
+    <string name="camera_capture_error">Nie udało się zrobić zdjęcia.</string>
+    <string name="photo_saved">Zdjęcie dodano do historii.</string>
+    <string name="photo_save_error">Nie udało się zapisać zdjęcia.</string>
     <string name="history_page_intro">Ostatnio dodane posiłki</string>
+    <string name="history_empty">Nie ma jeszcze zdjęć w historii.</string>
+    <string name="history_photo_default">Zdjęcie posiłku</string>
+    <string name="history_photo_content_description">Zdjęcie posiłku</string>
+    <string name="history_delete">Usuń zdjęcie z historii</string>
     <string name="settings_page_intro">Dostosuj działanie aplikacji</string>
     <string name="settings_notifications">Przypomnienia o posiłkach</string>
     <string name="settings_daily_limit">Limit dzienny · 2200 kcal</string>
