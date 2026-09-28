@@ -1,0 +1,38 @@
+[
+    {
+        "merged": "C:\\Users\\deadp\\.gradle\\daemon\\8.14.5\\com.example.caloriecounter.app-debug-40:\\layout_activity_main.xml.flat",
+        "source": "C:\\Users\\deadp\\.gradle\\daemon\\8.14.5\\com.example.caloriecounter.app-main-42:\\layout\\activity_main.xml"
+    },
+    {
+        "merged": "C:\\Users\\deadp\\.gradle\\daemon\\8.14.5\\com.example.caloriecounter.app-debug-40:\\drawable_ic_settings_24.xml.flat",
+        "source": "C:\\Users\\deadp\\.gradle\\daemon\\8.14.5\\com.example.caloriecounter.app-main-42:\\drawable\\ic_settings_24.xml"
+    },
+    {
+        "merged": "C:\\Users\\deadp\\.gradle\\daemon\\8.14.5\\com.example.caloriecounter.app-debug-40:\\drawable_ic_camera_24.xml.flat",
+        "source": "C:\\Users\\deadp\\.gradle\\daemon\\8.14.5\\com.example.caloriecounter.app-main-42:\\drawable\\ic_camera_24.xml"
+    },
+    {
+        "merged": "C:\\Users\\deadp\\.gradle\\daemon\\8.14.5\\com.example.caloriecounter.app-debug-40:\\drawable_ic_home_24.xml.flat",
+        "source": "C:\\Users\\deadp\\.gradle\\daemon\\8.14.5\\com.example.caloriecounter.app-main-42:\\drawable\\ic_home_24.xml"
+    },
+    {
+        "merged": "com.example.caloriecounter.app-debug-40:/drawable_ic_sun_24.xml.flat",
+        "source": "com.example.caloriecounter.app-main-42:/drawable/ic_sun_24.xml"
+    },
+    {
+        "merged": "C:\\Users\\deadp\\.gradle\\daemon\\8.14.5\\com.example.caloriecounter.app-debug-40:\\drawable_ic_history_24.xml.flat",
+        "source": "C:\\Users\\deadp\\.gradle\\daemon\\8.14.5\\com.example.caloriecounter.app-main-42:\\drawable\\ic_history_24.xml"
+    },
+    {
+        "merged": "C:\\Users\\deadp\\.gradle\\daemon\\8.14.5\\com.example.caloriecounter.app-debug-40:\\drawable_ic_moon_24.xml.flat",
+        "source": "C:\\Users\\deadp\\.gradle\\daemon\\8.14.5\\com.example.caloriecounter.app-main-42:\\drawable\\ic_moon_24.xml"
+    },
+    {
+        "merged": "C:\\Users\\deadp\\.gradle\\daemon\\8.14.5\\com.example.caloriecounter.app-debug-40:\\drawable_ic_sun_24.xml.flat",
+        "source": "C:\\Users\\deadp\\.gradle\\daemon\\8.14.5\\com.example.caloriecounter.app-main-42:\\drawable\\ic_sun_24.xml"
+    },
+    {
+        "merged": "C:\\Users\\deadp\\.gradle\\daemon\\8.14.5\\com.example.caloriecounter.app-debug-40:\\menu_bottom_nav_menu.xml.flat",
+        "source": "C:\\Users\\deadp\\.gradle\\daemon\\8.14.5\\com.example.caloriecounter.app-main-42:\\menu\\bottom_nav_menu.xml"
+    }
+]
