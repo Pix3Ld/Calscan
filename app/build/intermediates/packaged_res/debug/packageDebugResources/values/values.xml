@@ -5,7 +5,13 @@
     <string name="app_name">Calorie Counter</string>
     <string name="app_scan">Skan</string>
     <string name="app_settings">Ustawienia</string>
+    <string name="camera_capture_error">Nie udało się zrobić zdjęcia.</string>
+    <string name="camera_enable_button">Włącz kamerę</string>
+    <string name="history_delete">Usuń zdjęcie z historii</string>
+    <string name="history_empty">Nie ma jeszcze zdjęć w historii.</string>
     <string name="history_page_intro">Ostatnio dodane posiłki</string>
+    <string name="history_photo_content_description">Zdjęcie posiłku</string>
+    <string name="history_photo_default">Zdjęcie posiłku</string>
     <string name="label_daily_limit">Limit dzienny</string>
     <string name="label_macro_carbs">Węgl.</string>
     <string name="label_macro_fat">Tłuszcze</string>
@@ -19,6 +25,8 @@
     <string name="macro_carbs_template">Węgl. %1$d g</string>
     <string name="macro_fat_template">Tłuszcze %1$d g</string>
     <string name="macro_protein_template">Białko %1$d g</string>
+    <string name="photo_save_error">Nie udało się zapisać zdjęcia.</string>
+    <string name="photo_saved">Zdjęcie dodano do historii.</string>
     <string name="placeholder_scan">Zeskanuj posiłek</string>
     <string name="remaining_value_template">%1$d kcal</string>
     <string name="scan_button">Zrób zdjęcie</string>
@@ -27,7 +35,7 @@
     <string name="settings_daily_limit">Limit dzienny · 2200 kcal</string>
     <string name="settings_notifications">Przypomnienia o posiłkach</string>
     <string name="settings_page_intro">Dostosuj działanie aplikacji</string>
-    <string name="title_dashboard">Dashboard</string>
+    <string name="title_dashboard">Home</string>
     <string name="title_history">Historia posiłków</string>
     <string name="title_scan">Skanuj posiłek</string>
     <string name="title_settings">Ustawienia</string>

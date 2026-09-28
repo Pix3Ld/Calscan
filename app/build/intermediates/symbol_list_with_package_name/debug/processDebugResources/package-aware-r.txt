@@ -3853,6 +3853,8 @@ string call_notification_hang_up_action
 string call_notification_incoming_text
 string call_notification_ongoing_text
 string call_notification_screening_text
+string camera_capture_error
+string camera_enable_button
 string character_counter_content_description
 string character_counter_overflowed_content_description
 string character_counter_pattern
@@ -3863,7 +3865,11 @@ string exposed_dropdown_menu_content_description
 string fab_transformation_scrim_behavior
 string fab_transformation_sheet_behavior
 string hide_bottom_view_on_scroll_behavior
+string history_delete
+string history_empty
 string history_page_intro
+string history_photo_content_description
+string history_photo_default
 string icon_content_description
 string item_view_role_description
 string label_daily_limit
@@ -3984,6 +3990,8 @@ string path_password_eye
 string path_password_eye_mask_strike_through
 string path_password_eye_mask_visible
 string path_password_strike_through
+string photo_save_error
+string photo_saved
 string placeholder_scan
 string remaining_value_template
 string scan_button
