@@ -40,9 +40,13 @@ public final class MealDao_Impl implements MealDao {
 
   private final EntityInsertionAdapter<MealSummaryEntity> __insertionAdapterOfMealSummaryEntity;
 
+  private final EntityInsertionAdapter<PhotoHistoryEntity> __insertionAdapterOfPhotoHistoryEntity;
+
   private final EntityDeletionOrUpdateAdapter<AnalysisJobEntity> __updateAdapterOfAnalysisJobEntity;
 
   private final SharedSQLiteStatement __preparedStmtOfDeleteSummary;
+
+  private final SharedSQLiteStatement __preparedStmtOfDeletePhotoHistory;
 
   public MealDao_Impl(@NonNull final RoomDatabase __db) {
     this.__db = __db;
@@ -123,6 +127,30 @@ public final class MealDao_Impl implements MealDao {
         statement.bindLong(11, entity.getCreatedAt());
       }
     };
+    this.__insertionAdapterOfPhotoHistoryEntity = new EntityInsertionAdapter<PhotoHistoryEntity>(__db) {
+      @Override
+      @NonNull
+      protected String createQuery() {
+        return "INSERT OR ABORT INTO `photo_history` (`id`,`imageBytes`,`note`,`createdAt`) VALUES (nullif(?, 0),?,?,?)";
+      }
+
+      @Override
+      protected void bind(@NonNull final SupportSQLiteStatement statement,
+          @NonNull final PhotoHistoryEntity entity) {
+        statement.bindLong(1, entity.getId());
+        if (entity.getImageBytes() == null) {
+          statement.bindNull(2);
+        } else {
+          statement.bindBlob(2, entity.getImageBytes());
+        }
+        if (entity.getNote() == null) {
+          statement.bindNull(3);
+        } else {
+          statement.bindString(3, entity.getNote());
+        }
+        statement.bindLong(4, entity.getCreatedAt());
+      }
+    };
     this.__updateAdapterOfAnalysisJobEntity = new EntityDeletionOrUpdateAdapter<AnalysisJobEntity>(__db) {
       @Override
       @NonNull
@@ -174,6 +202,14 @@ public final class MealDao_Impl implements MealDao {
         return _query;
       }
     };
+    this.__preparedStmtOfDeletePhotoHistory = new SharedSQLiteStatement(__db) {
+      @Override
+      @NonNull
+      public String createQuery() {
+        final String _query = "DELETE FROM photo_history WHERE id = ?";
+        return _query;
+      }
+    };
   }
 
   @Override
@@ -207,6 +243,25 @@ public final class MealDao_Impl implements MealDao {
           __insertionAdapterOfMealSummaryEntity.insert(summary);
           __db.setTransactionSuccessful();
           return Unit.INSTANCE;
+        } finally {
+          __db.endTransaction();
+        }
+      }
+    }, $completion);
+  }
+
+  @Override
+  public Object insertPhotoHistory(final PhotoHistoryEntity photo,
+      final Continuation<? super Long> $completion) {
+    return CoroutinesRoom.execute(__db, true, new Callable<Long>() {
+      @Override
+      @NonNull
+      public Long call() throws Exception {
+        __db.beginTransaction();
+        try {
+          final Long _result = __insertionAdapterOfPhotoHistoryEntity.insertAndReturnId(photo);
+          __db.setTransactionSuccessful();
+          return _result;
         } finally {
           __db.endTransaction();
         }
@@ -253,6 +308,32 @@ public final class MealDao_Impl implements MealDao {
           }
         } finally {
           __preparedStmtOfDeleteSummary.release(_stmt);
+        }
+      }
+    }, $completion);
+  }
+
+  @Override
+  public Object deletePhotoHistory(final long photoId,
+      final Continuation<? super Unit> $completion) {
+    return CoroutinesRoom.execute(__db, true, new Callable<Unit>() {
+      @Override
+      @NonNull
+      public Unit call() throws Exception {
+        final SupportSQLiteStatement _stmt = __preparedStmtOfDeletePhotoHistory.acquire();
+        int _argIndex = 1;
+        _stmt.bindLong(_argIndex, photoId);
+        try {
+          __db.beginTransaction();
+          try {
+            _stmt.executeUpdateDelete();
+            __db.setTransactionSuccessful();
+            return Unit.INSTANCE;
+          } finally {
+            __db.endTransaction();
+          }
+        } finally {
+          __preparedStmtOfDeletePhotoHistory.release(_stmt);
         }
       }
     }, $completion);
@@ -394,6 +475,55 @@ public final class MealDao_Impl implements MealDao {
             final long _tmpCreatedAt;
             _tmpCreatedAt = _cursor.getLong(_cursorIndexOfCreatedAt);
             _item = new MealSummaryEntity(_tmpId,_tmpJobId,_tmpTitle,_tmpCaloriesKcal,_tmpProteinGrams,_tmpCarbohydratesGrams,_tmpFatGrams,_tmpFiberGrams,_tmpVitaminsJson,_tmpImageBytes,_tmpCreatedAt);
+            _result.add(_item);
+          }
+          return _result;
+        } finally {
+          _cursor.close();
+        }
+      }
+
+      @Override
+      protected void finalize() {
+        _statement.release();
+      }
+    });
+  }
+
+  @Override
+  public Flow<List<PhotoHistoryEntity>> observePhotoHistory() {
+    final String _sql = "SELECT * FROM photo_history ORDER BY createdAt DESC";
+    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 0);
+    return CoroutinesRoom.createFlow(__db, false, new String[] {"photo_history"}, new Callable<List<PhotoHistoryEntity>>() {
+      @Override
+      @NonNull
+      public List<PhotoHistoryEntity> call() throws Exception {
+        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
+        try {
+          final int _cursorIndexOfId = CursorUtil.getColumnIndexOrThrow(_cursor, "id");
+          final int _cursorIndexOfImageBytes = CursorUtil.getColumnIndexOrThrow(_cursor, "imageBytes");
+          final int _cursorIndexOfNote = CursorUtil.getColumnIndexOrThrow(_cursor, "note");
+          final int _cursorIndexOfCreatedAt = CursorUtil.getColumnIndexOrThrow(_cursor, "createdAt");
+          final List<PhotoHistoryEntity> _result = new ArrayList<PhotoHistoryEntity>(_cursor.getCount());
+          while (_cursor.moveToNext()) {
+            final PhotoHistoryEntity _item;
+            final long _tmpId;
+            _tmpId = _cursor.getLong(_cursorIndexOfId);
+            final byte[] _tmpImageBytes;
+            if (_cursor.isNull(_cursorIndexOfImageBytes)) {
+              _tmpImageBytes = null;
+            } else {
+              _tmpImageBytes = _cursor.getBlob(_cursorIndexOfImageBytes);
+            }
+            final String _tmpNote;
+            if (_cursor.isNull(_cursorIndexOfNote)) {
+              _tmpNote = null;
+            } else {
+              _tmpNote = _cursor.getString(_cursorIndexOfNote);
+            }
+            final long _tmpCreatedAt;
+            _tmpCreatedAt = _cursor.getLong(_cursorIndexOfCreatedAt);
+            _item = new PhotoHistoryEntity(_tmpId,_tmpImageBytes,_tmpNote,_tmpCreatedAt);
             _result.add(_item);
           }
           return _result;

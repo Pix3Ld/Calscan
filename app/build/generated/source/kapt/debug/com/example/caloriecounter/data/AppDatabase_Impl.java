@@ -31,19 +31,21 @@ public final class AppDatabase_Impl extends AppDatabase {
   @Override
   @NonNull
   protected SupportSQLiteOpenHelper createOpenHelper(@NonNull final DatabaseConfiguration config) {
-    final SupportSQLiteOpenHelper.Callback _openCallback = new RoomOpenHelper(config, new RoomOpenHelper.Delegate(1) {
+    final SupportSQLiteOpenHelper.Callback _openCallback = new RoomOpenHelper(config, new RoomOpenHelper.Delegate(2) {
       @Override
       public void createAllTables(@NonNull final SupportSQLiteDatabase db) {
         db.execSQL("CREATE TABLE IF NOT EXISTS `analysis_jobs` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `inputType` TEXT NOT NULL, `textInput` TEXT, `imageBytes` BLOB, `status` TEXT NOT NULL, `errorMessage` TEXT, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL)");
         db.execSQL("CREATE TABLE IF NOT EXISTS `meal_summaries` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `jobId` INTEGER NOT NULL, `title` TEXT NOT NULL, `caloriesKcal` INTEGER NOT NULL, `proteinGrams` REAL NOT NULL, `carbohydratesGrams` REAL NOT NULL, `fatGrams` REAL NOT NULL, `fiberGrams` REAL NOT NULL, `vitaminsJson` TEXT NOT NULL, `imageBytes` BLOB, `createdAt` INTEGER NOT NULL)");
+        db.execSQL("CREATE TABLE IF NOT EXISTS `photo_history` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `imageBytes` BLOB NOT NULL, `note` TEXT, `createdAt` INTEGER NOT NULL)");
         db.execSQL("CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)");
-        db.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd5a1bb67e3c8b16ef7e1c86b7dc39f31')");
+        db.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '06646c42317793e08d0f81a12b33c27e')");
       }
 
       @Override
       public void dropAllTables(@NonNull final SupportSQLiteDatabase db) {
         db.execSQL("DROP TABLE IF EXISTS `analysis_jobs`");
         db.execSQL("DROP TABLE IF EXISTS `meal_summaries`");
+        db.execSQL("DROP TABLE IF EXISTS `photo_history`");
         final List<? extends RoomDatabase.Callback> _callbacks = mCallbacks;
         if (_callbacks != null) {
           for (RoomDatabase.Callback _callback : _callbacks) {
@@ -126,9 +128,23 @@ public final class AppDatabase_Impl extends AppDatabase {
                   + " Expected:\n" + _infoMealSummaries + "\n"
                   + " Found:\n" + _existingMealSummaries);
         }
+        final HashMap<String, TableInfo.Column> _columnsPhotoHistory = new HashMap<String, TableInfo.Column>(4);
+        _columnsPhotoHistory.put("id", new TableInfo.Column("id", "INTEGER", true, 1, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsPhotoHistory.put("imageBytes", new TableInfo.Column("imageBytes", "BLOB", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsPhotoHistory.put("note", new TableInfo.Column("note", "TEXT", false, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsPhotoHistory.put("createdAt", new TableInfo.Column("createdAt", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        final HashSet<TableInfo.ForeignKey> _foreignKeysPhotoHistory = new HashSet<TableInfo.ForeignKey>(0);
+        final HashSet<TableInfo.Index> _indicesPhotoHistory = new HashSet<TableInfo.Index>(0);
+        final TableInfo _infoPhotoHistory = new TableInfo("photo_history", _columnsPhotoHistory, _foreignKeysPhotoHistory, _indicesPhotoHistory);
+        final TableInfo _existingPhotoHistory = TableInfo.read(db, "photo_history");
+        if (!_infoPhotoHistory.equals(_existingPhotoHistory)) {
+          return new RoomOpenHelper.ValidationResult(false, "photo_history(com.example.caloriecounter.data.PhotoHistoryEntity).\n"
+                  + " Expected:\n" + _infoPhotoHistory + "\n"
+                  + " Found:\n" + _existingPhotoHistory);
+        }
         return new RoomOpenHelper.ValidationResult(true, null);
       }
-    }, "d5a1bb67e3c8b16ef7e1c86b7dc39f31", "574c18936aca7bedad5f81e8619189bd");
+    }, "06646c42317793e08d0f81a12b33c27e", "2f517f6bc326888fd79837ad163279f1");
     final SupportSQLiteOpenHelper.Configuration _sqliteConfig = SupportSQLiteOpenHelper.Configuration.builder(config.context).name(config.name).callback(_openCallback).build();
     final SupportSQLiteOpenHelper _helper = config.sqliteOpenHelperFactory.create(_sqliteConfig);
     return _helper;
@@ -139,7 +155,7 @@ public final class AppDatabase_Impl extends AppDatabase {
   protected InvalidationTracker createInvalidationTracker() {
     final HashMap<String, String> _shadowTablesMap = new HashMap<String, String>(0);
     final HashMap<String, Set<String>> _viewTables = new HashMap<String, Set<String>>(0);
-    return new InvalidationTracker(this, _shadowTablesMap, _viewTables, "analysis_jobs","meal_summaries");
+    return new InvalidationTracker(this, _shadowTablesMap, _viewTables, "analysis_jobs","meal_summaries","photo_history");
   }
 
   @Override
@@ -150,6 +166,7 @@ public final class AppDatabase_Impl extends AppDatabase {
       super.beginTransaction();
       _db.execSQL("DELETE FROM `analysis_jobs`");
       _db.execSQL("DELETE FROM `meal_summaries`");
+      _db.execSQL("DELETE FROM `photo_history`");
       super.setTransactionSuccessful();
     } finally {
       super.endTransaction();

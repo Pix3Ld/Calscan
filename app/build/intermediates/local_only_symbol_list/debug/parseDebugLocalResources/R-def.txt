@@ -43,7 +43,13 @@ string app_home
 string app_name
 string app_scan
 string app_settings
+string camera_capture_error
+string camera_enable_button
+string history_delete
+string history_empty
 string history_page_intro
+string history_photo_content_description
+string history_photo_default
 string label_daily_limit
 string label_macro_carbs
 string label_macro_fat
@@ -57,6 +63,8 @@ string label_yesterday
 string macro_carbs_template
 string macro_fat_template
 string macro_protein_template
+string photo_save_error
+string photo_saved
 string placeholder_scan
 string remaining_value_template
 string scan_button

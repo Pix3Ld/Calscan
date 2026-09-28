@@ -30,20 +30,25 @@ The project is organized into several packages and directories:
 - **recognition**: Contains classes related to image recognition, such as models and utilities for processing images and recognizing food items.
 
 ## Setup Instructions
-1. **Clone the repository**:
-   ```
-   git clone <repository-url>
-   cd calorie-counter-app
-   ```
+### Requirements
 
-2. **Open the project** in your preferred IDE.
+- Android Studio with Android SDK Platform 36 and Android Build Tools 36.1.0.
+- JDK 17 or newer. The JDK bundled with Android Studio is recommended.
+- An Android emulator or a device with USB debugging enabled to run the app.
 
-3. **Build the project**:
-   ```
-   ./gradlew build
-   ```
+### Open and run
 
-4. **Run the application** on an emulator or physical device.
+1. Clone the repository and open its root folder in Android Studio.
+2. Set the Gradle JDK to the Android Studio bundled JDK, then sync the project. Android Studio can download missing SDK components and creates the machine-specific `local.properties` file.
+3. Select an emulator or connected device and click **Run**.
+
+To build from a terminal, use the Gradle Wrapper included in the repository:
+
+```powershell
+gradlew.bat :app:assembleDebug
+```
+
+On macOS or Linux, run `./gradlew :app:assembleDebug` instead.
 
 ## Usage
 - Launch the app and navigate to the camera feature.
