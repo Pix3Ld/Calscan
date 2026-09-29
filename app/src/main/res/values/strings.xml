@@ -26,6 +26,7 @@
     <string name="title_scan">Skanuj posiłek</string>
     <string name="title_history">Historia posiłków</string>
     <string name="title_settings">Ustawienia</string>
+    <string name="settings_reminders_title">Przypomnienia o posiłkach</string>
     <string name="title_details">Szczegóły skanu</string>
     <string name="scan_page_intro">Skieruj aparat na posiłek, aby przygotować jego analizę.</string>
     <string name="scan_button">Zrób zdjęcie</string>
@@ -62,5 +63,14 @@
     <string name="reminder_meal_count_label">Liczba posiłków: %1$d</string>
     <string name="reminder_meal_time_label">Posiłek %1$d · %2$s</string>
     <string name="reminder_permissions_required">Aby włączyć przypomnienia, zezwól na powiadomienia i dokładne alarmy w ustawieniach Androida.</string>
-    <string name="settings_daily_limit">Limit dzienny · 2200 kcal</string>
+    <string name="settings_reminders_summary_on">Aktywne · %1$d powiadomień dziennie</string>
+    <string name="settings_reminders_summary_off">Wyłączone</string>
+    <string name="settings_daily_limit">Limit dzienny</string>
+    <string name="settings_daily_limit_summary">%1$d kcal dziennie</string>
+    <string name="settings_back">Wróć do Ustawień</string>
+    <string name="settings_reminders_intro">Ustaw pory przypomnień o posiłkach.</string>
+    <string name="daily_limit_description">Ustaw dzienną ilość kalorii, do której chcesz dążyć.</string>
+    <string name="daily_limit_input_label">Twój limit dzienny</string>
+    <string name="daily_limit_unit">kcal</string>
+    <string name="daily_limit_invalid">Wpisz poprawny limit większy od zera.</string>
 </resources>

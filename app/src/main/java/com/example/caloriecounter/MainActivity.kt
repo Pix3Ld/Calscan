@@ -44,6 +44,7 @@ import android.hardware.camera2.params.StreamConfigurationMap
 import android.media.ImageReader
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.Looper
 import android.content.pm.PackageManager
 import android.util.Size
 import androidx.appcompat.app.AppCompatActivity
@@ -75,7 +76,15 @@ import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
-    private val dailyLimit = 2200
+    private var dailyLimit = DEFAULT_DAILY_LIMIT
+    private var dailyLimitSummaryView: TextView? = null
+    private var dailyLimitInputLayout: TextInputLayout? = null
+    private var pendingDailyLimitValue: Int? = null
+    private var pendingDailyLimitSave: Runnable? = null
+    private val mainThreadHandler by lazy { Handler(Looper.getMainLooper()) }
+    private val appSettings by lazy {
+        getSharedPreferences(APP_SETTINGS_PREFERENCES, Context.MODE_PRIVATE)
+    }
     private val todayConsumed = 1545
     private val yesterdayConsumed = 1880
     private val weekCalories = listOf(1800, 2100, 1650, 1950, 1480, 1730, 1545)
@@ -147,6 +156,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        dailyLimit = appSettings.getInt(KEY_DAILY_LIMIT, DEFAULT_DAILY_LIMIT).coerceAtLeast(1)
         setContentView(R.layout.activity_main)
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootLayout)) { view, insets ->
@@ -258,9 +268,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private enum class Page { HOME, SCAN, HISTORY, SETTINGS, DETAILS }
+    private enum class Page { HOME, SCAN, HISTORY, SETTINGS, REMINDER_SETTINGS, LIMIT_SETTINGS, DETAILS }
 
     private fun showPage(page: Page): Boolean {
+        if (currentPage == Page.LIMIT_SETTINGS) savePendingDailyLimit()
         detailsBackCallback.isEnabled = false
         closeCamera()
         scanDetailsInputLayout = null
@@ -293,9 +304,23 @@ class MainActivity : AppCompatActivity() {
                 titleText.text = getString(R.string.title_settings)
                 buildSettingsPage()
             }
+            Page.REMINDER_SETTINGS -> {
+                titleText.text = getString(R.string.settings_reminders_title)
+                buildReminderSettingsPage()
+            }
+            Page.LIMIT_SETTINGS -> {
+                titleText.text = getString(R.string.settings_daily_limit)
+                buildDailyLimitPage()
+            }
             Page.HOME, Page.DETAILS -> Unit
         }
         return true
+    }
+
+    private fun openSettingsDetail(page: Page) {
+        detailsReturnPage = Page.SETTINGS
+        showPage(page)
+        detailsBackCallback.isEnabled = true
     }
 
     private fun showPhotoDetails(photo: PhotoHistoryEntity, returnPage: Page) {
@@ -562,6 +587,91 @@ class MainActivity : AppCompatActivity() {
     private fun buildSettingsPage() {
         pageContainer.addView(pageText(getString(R.string.settings_page_intro), 16f, true))
         val settings = reminderSettingsStore.load()
+        val reminderSummary = if (settings.enabled) {
+            getString(R.string.settings_reminders_summary_on, settings.mealCount)
+        } else {
+            getString(R.string.settings_reminders_summary_off)
+        }
+        pageContainer.addView(settingsOptionRow(
+            getString(R.string.settings_reminders_title),
+            reminderSummary
+        ) { openSettingsDetail(Page.REMINDER_SETTINGS) })
+
+        val limitSummary = pageText(getString(R.string.settings_daily_limit_summary, dailyLimit), 14f, false)
+        dailyLimitSummaryView = limitSummary
+        pageContainer.addView(settingsOptionRow(
+            getString(R.string.settings_daily_limit),
+            getString(R.string.settings_daily_limit_summary, dailyLimit),
+            limitSummary
+        ) { openSettingsDetail(Page.LIMIT_SETTINGS) })
+    }
+
+    private fun settingsOptionRow(
+        title: String,
+        summary: String,
+        summaryView: TextView = pageText(summary, 14f, false),
+        onClick: () -> Unit
+    ): View = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(16.dp(), 14.dp(), 12.dp(), 14.dp())
+        background = GradientDrawable().apply {
+            cornerRadius = 8.dp().toFloat()
+            setColor(if (isDarkTheme) Color.parseColor("#1F2937") else Color.WHITE)
+        }
+        isClickable = true
+        isFocusable = true
+        contentDescription = "$title. $summary"
+        layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(0, 12.dp(), 0, 0) }
+
+        val textContainer = LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        textContainer.addView(pageText(title, 16f, true))
+        summaryView.text = summary
+        summaryView.setTextColor(if (isDarkTheme) Color.parseColor("#D1D5DB") else Color.parseColor("#697586"))
+        summaryView.setPadding(0, 4.dp(), 0, 0)
+        textContainer.addView(summaryView)
+        addView(textContainer)
+        addView(TextView(this@MainActivity).apply {
+            text = "›"
+            textSize = 28f
+            gravity = Gravity.CENTER
+            setTextColor(if (isDarkTheme) Color.parseColor("#D1D5DB") else Color.parseColor("#697586"))
+        }, LinearLayout.LayoutParams(32.dp(), ViewGroup.LayoutParams.MATCH_PARENT))
+        setOnClickListener { onClick() }
+    }
+
+    private fun addSettingsBackButton() {
+        pageContainer.addView(ImageButton(this).apply {
+            setImageResource(android.R.drawable.ic_media_previous)
+            contentDescription = getString(R.string.settings_back)
+            background = ColorDrawable(Color.TRANSPARENT)
+            setOnClickListener { showPage(detailsReturnPage) }
+        }, LinearLayout.LayoutParams(48.dp(), 48.dp()))
+    }
+
+    private fun buildReminderSettingsPage() {
+        val scrollView = android.widget.ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 8.dp(), 0, 16.dp())
+        }
+        scrollView.addView(content)
+        pageContainer.addView(scrollView)
+        content.addView(pageText(getString(R.string.settings_reminders_intro), 15f, false))
+
+        val settings = reminderSettingsStore.load()
         val notifications = Switch(this).apply {
             text = getString(R.string.settings_notifications)
             isChecked = settings.enabled
@@ -577,18 +687,94 @@ class MainActivity : AppCompatActivity() {
                 disableMealReminders()
             }
         }
-        pageContainer.addView(notifications)
+        content.addView(notifications)
         reminderOptions = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             visibility = if (settings.enabled) View.VISIBLE else View.GONE
         }
-        pageContainer.addView(reminderOptions)
+        content.addView(reminderOptions)
         renderReminderOptions()
-        val dailyLimit = Button(this).apply {
-            text = getString(R.string.settings_daily_limit)
-            setOnClickListener { }
+    }
+
+    private fun buildDailyLimitPage() {
+        addSettingsBackButton()
+        pageContainer.addView(pageText(getString(R.string.daily_limit_description), 15f, false))
+        pageContainer.addView(pageText(getString(R.string.daily_limit_input_label), 16f, true).apply {
+            setPadding(0, 24.dp(), 0, 8.dp())
+        })
+
+        val inputLayout = TextInputLayout(this).apply {
+            boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+            isHintEnabled = false
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
         }
-        pageContainer.addView(dailyLimit)
+        dailyLimitInputLayout = inputLayout
+        val input = TextInputEditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER
+            maxLines = 1
+            setText(dailyLimit.toString())
+            setSelectAllOnFocus(true)
+            setOnFocusChangeListener { _, hasFocus -> if (hasFocus) setSelection(text?.length ?: 0) }
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                override fun afterTextChanged(text: Editable?) {
+                    scheduleDailyLimitSave(text?.toString())
+                }
+            })
+        }
+        inputLayout.addView(input)
+
+        val valueRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(inputLayout, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(pageText(getString(R.string.daily_limit_unit), 16f, true).apply {
+                setPadding(12.dp(), 0, 0, 0)
+            })
+        }
+        pageContainer.addView(valueRow)
+    }
+
+    private fun scheduleDailyLimitSave(rawValue: String?) {
+        val newLimit = rawValue?.toIntOrNull()
+        if (newLimit == null || newLimit <= 0) {
+            dailyLimitInputLayout?.error = getString(R.string.daily_limit_invalid)
+            pendingDailyLimitSave?.let(mainThreadHandler::removeCallbacks)
+            pendingDailyLimitSave = null
+            pendingDailyLimitValue = null
+            return
+        }
+
+        dailyLimitInputLayout?.error = null
+        if (newLimit == dailyLimit) {
+            pendingDailyLimitSave?.let(mainThreadHandler::removeCallbacks)
+            pendingDailyLimitSave = null
+            pendingDailyLimitValue = null
+            return
+        }
+
+        pendingDailyLimitSave?.let(mainThreadHandler::removeCallbacks)
+        pendingDailyLimitValue = newLimit
+        val save = Runnable {
+            if (pendingDailyLimitValue == newLimit) savePendingDailyLimit()
+        }
+        pendingDailyLimitSave = save
+        mainThreadHandler.postDelayed(save, DAILY_LIMIT_SAVE_DELAY_MS)
+    }
+
+    private fun savePendingDailyLimit() {
+        val newLimit = pendingDailyLimitValue ?: return
+        pendingDailyLimitSave?.let(mainThreadHandler::removeCallbacks)
+        pendingDailyLimitSave = null
+        pendingDailyLimitValue = null
+        dailyLimit = newLimit
+        appSettings.edit().putInt(KEY_DAILY_LIMIT, newLimit).apply()
+        updateDashboard()
+        dailyLimitSummaryView?.text = getString(R.string.settings_daily_limit_summary, newLimit)
     }
 
     private fun initializeHomeReminderNotice() {
@@ -1076,6 +1262,10 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val CAMERA_PERMISSION_REQUEST = 1001
+        private const val DEFAULT_DAILY_LIMIT = 2200
+        private const val APP_SETTINGS_PREFERENCES = "calorie_counter_settings"
+        private const val KEY_DAILY_LIMIT = "daily_limit"
+        private const val DAILY_LIMIT_SAVE_DELAY_MS = 500L
     }
 
     private fun updateDashboard() {
