@@ -41,6 +41,7 @@ import android.content.pm.PackageManager
 import android.util.Size
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.activity.OnBackPressedCallback
 import androidx.exifinterface.media.ExifInterface
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -103,6 +104,8 @@ class MainActivity : AppCompatActivity() {
     private var cameraEnabled = true
     private var pendingPhotoNote: String? = null
     private var currentPage = Page.HOME
+    private var detailsReturnPage = Page.HISTORY
+    private lateinit var detailsBackCallback: OnBackPressedCallback
     private val mealRepository by lazy {
         MealRepository(DatabaseProvider.get(applicationContext).mealDao())
     }
@@ -173,6 +176,13 @@ class MainActivity : AppCompatActivity() {
                 else -> false
             }
         }
+
+        detailsBackCallback = object : OnBackPressedCallback(false) {
+            override fun handleOnBackPressed() {
+                showPage(detailsReturnPage)
+            }
+        }
+        onBackPressedDispatcher.addCallback(this, detailsBackCallback)
     }
 
     override fun onDestroy() {
@@ -193,9 +203,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private enum class Page { HOME, SCAN, HISTORY, SETTINGS }
+    private enum class Page { HOME, SCAN, HISTORY, SETTINGS, DETAILS }
 
     private fun showPage(page: Page): Boolean {
+        detailsBackCallback.isEnabled = false
         closeCamera()
         scanDetailsInputLayout = null
         scanDetailsEditText = null
@@ -225,9 +236,85 @@ class MainActivity : AppCompatActivity() {
                 titleText.text = getString(R.string.title_settings)
                 buildSettingsPage()
             }
-            Page.HOME -> Unit
+            Page.HOME, Page.DETAILS -> Unit
         }
         return true
+    }
+
+    private fun showPhotoDetails(photo: PhotoHistoryEntity, returnPage: Page) {
+        closeCamera()
+        scanDetailsInputLayout = null
+        scanDetailsEditText = null
+        cameraPlaceholder = null
+        captureButton = null
+        detailsReturnPage = returnPage
+        currentPage = Page.DETAILS
+        detailsBackCallback.isEnabled = true
+        homeContentViews.forEach { it.visibility = View.GONE }
+        pageContainer.visibility = View.VISIBLE
+        pageContainer.removeAllViews()
+        titleText.text = getString(R.string.title_details)
+        buildPhotoDetails(photo)
+    }
+
+    private fun buildPhotoDetails(photo: PhotoHistoryEntity) {
+        pageContainer.addView(Button(this).apply {
+            text = getString(R.string.details_back)
+            isAllCaps = false
+            setOnClickListener { showPage(detailsReturnPage) }
+        })
+
+        val scrollView = android.widget.ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 8.dp(), 0, 16.dp())
+        }
+        val photoView = ImageView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                300.dp()
+            )
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setBackgroundColor(Color.BLACK)
+            setImageBitmap(decodeOrientedPhoto(photo.imageBytes))
+            contentDescription = getString(R.string.history_photo_content_description)
+        }
+        content.addView(photoView)
+        content.addView(pageText(
+            SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(photo.createdAt)),
+            13f,
+            false
+        ).apply { setPadding(0, 12.dp(), 0, 0) })
+        photo.note?.let { note ->
+            content.addView(pageText(note, 16f, true).apply { setPadding(0, 8.dp(), 0, 0) })
+        }
+
+        content.addView(pageText(getString(R.string.details_mock_notice), 13f, false).apply {
+            setPadding(0, 20.dp(), 0, 8.dp())
+        })
+        content.addView(pageText(getString(R.string.details_mock_meal_name), 22f, true))
+        content.addView(pageText(getString(R.string.details_mock_calories), 28f, true).apply {
+            setPadding(0, 4.dp(), 0, 12.dp())
+        })
+        listOf(
+            R.string.details_protein,
+            R.string.details_carbohydrates,
+            R.string.details_fat,
+            R.string.details_fiber,
+            R.string.details_vitamins
+        ).forEach { value ->
+            content.addView(pageText(getString(value), 16f, false).apply {
+                setPadding(0, 6.dp(), 0, 6.dp())
+            })
+        }
+        scrollView.addView(content)
+        pageContainer.addView(scrollView)
     }
 
     private fun buildScanPage() {
@@ -398,6 +485,9 @@ class MainActivity : AppCompatActivity() {
             ))
             details.addView(pageText(photo.note ?: getString(R.string.history_photo_default), 15f, true))
             row.addView(details)
+            row.isClickable = true
+            row.isFocusable = true
+            row.setOnClickListener { showPhotoDetails(photo, Page.HISTORY) }
 
             val deleteButton = ImageButton(this).apply {
                 setImageResource(android.R.drawable.ic_menu_delete)
@@ -618,12 +708,13 @@ class MainActivity : AppCompatActivity() {
     private fun saveCapturedPhoto(imageBytes: ByteArray, note: String?) {
         lifecycleScope.launch {
             try {
-                mealRepository.savePhoto(imageBytes, note)
+                val photo = mealRepository.savePhoto(imageBytes, note)
                 android.widget.Toast.makeText(
                     this@MainActivity,
                     R.string.photo_saved,
                     android.widget.Toast.LENGTH_SHORT
                 ).show()
+                if (currentPage == Page.SCAN) showPhotoDetails(photo, Page.SCAN)
             } catch (_: Exception) {
                 android.widget.Toast.makeText(
                     this@MainActivity,

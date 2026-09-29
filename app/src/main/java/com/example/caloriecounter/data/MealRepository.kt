@@ -7,11 +7,13 @@ class MealRepository(private val dao: MealDao) {
 
     fun observePhotoHistory(): Flow<List<PhotoHistoryEntity>> = dao.observePhotoHistory()
 
-    suspend fun savePhoto(imageBytes: ByteArray, note: String?): Long {
+    suspend fun savePhoto(imageBytes: ByteArray, note: String?): PhotoHistoryEntity {
         require(imageBytes.isNotEmpty()) { "Image cannot be empty" }
-        return dao.insertPhotoHistory(
-            PhotoHistoryEntity(imageBytes = imageBytes, note = note?.trim()?.takeIf { it.isNotEmpty() })
+        val photo = PhotoHistoryEntity(
+            imageBytes = imageBytes,
+            note = note?.trim()?.takeIf { it.isNotEmpty() }
         )
+        return photo.copy(id = dao.insertPhotoHistory(photo))
     }
 
     suspend fun deletePhoto(photoId: Long) = dao.deletePhotoHistory(photoId)
