@@ -2,7 +2,9 @@ package com.example.caloriecounter
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.TimePickerDialog
 import android.content.Context
+import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.SurfaceTexture
 import android.graphics.Color
@@ -12,6 +14,9 @@ import android.graphics.BitmapFactory
 import android.graphics.ImageFormat
 import android.graphics.Matrix
 import android.os.Bundle
+import android.os.Build
+import android.net.Uri
+import android.provider.Settings
 import android.text.InputType
 import android.text.Editable
 import android.text.TextWatcher
@@ -25,8 +30,10 @@ import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.NumberPicker
 import android.widget.Switch
 import android.widget.TextView
+import android.widget.Toast
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CaptureFailure
 import android.hardware.camera2.CameraCharacteristics
@@ -42,6 +49,9 @@ import android.util.Size
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import androidx.exifinterface.media.ExifInterface
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -53,6 +63,10 @@ import com.google.android.material.textfield.TextInputLayout
 import com.example.caloriecounter.data.DatabaseProvider
 import com.example.caloriecounter.data.MealRepository
 import com.example.caloriecounter.data.PhotoHistoryEntity
+import com.example.caloriecounter.reminders.MealReminderScheduler
+import com.example.caloriecounter.reminders.MealReminderSettings
+import com.example.caloriecounter.reminders.MealReminderSettingsStore
+import com.example.caloriecounter.reminders.ReminderTimeCalculator
 import kotlinx.coroutines.launch
 import java.io.ByteArrayInputStream
 import java.text.SimpleDateFormat
@@ -106,6 +120,27 @@ class MainActivity : AppCompatActivity() {
     private var currentPage = Page.HOME
     private var detailsReturnPage = Page.HISTORY
     private lateinit var detailsBackCallback: OnBackPressedCallback
+    private var reminderSwitch: Switch? = null
+    private var reminderOptions: LinearLayout? = null
+    private var reminderHomeNotice: TextView? = null
+    private var updatingReminderSwitch = false
+    private var pendingReminderEnable = false
+    private val reminderSettingsStore by lazy { MealReminderSettingsStore(applicationContext) }
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) continueReminderEnableFlow() else rejectReminderEnable()
+    }
+    private val exactAlarmSettingsLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (!pendingReminderEnable) return@registerForActivityResult
+        if (MealReminderScheduler.hasExactAlarmAccess(this)) {
+            continueReminderEnableFlow()
+        } else {
+            rejectReminderEnable()
+        }
+    }
     private val mealRepository by lazy {
         MealRepository(DatabaseProvider.get(applicationContext).mealDao())
     }
@@ -149,6 +184,7 @@ class MainActivity : AppCompatActivity() {
         }
         rootLayout.addView(pageContainer, 1)
         homeContentViews = (2..7).map { rootLayout.getChildAt(it) }
+        initializeHomeReminderNotice()
 
         themeToggle.setOnClickListener {
             isDarkTheme = !isDarkTheme
@@ -190,6 +226,25 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (!pendingReminderEnable) {
+            val settings = reminderSettingsStore.load()
+            if (settings.enabled) {
+                if (!reminderPermissionsGranted()) {
+                    reminderSettingsStore.save(settings.copy(enabled = false))
+                    MealReminderScheduler.cancelAll(this)
+                    setReminderSwitchChecked(false)
+                    reminderOptions?.visibility = View.GONE
+                    Toast.makeText(this, R.string.reminder_permissions_required, Toast.LENGTH_LONG).show()
+                } else {
+                    MealReminderScheduler.scheduleAll(this)
+                }
+            }
+        }
+        updateHomeReminderNotice()
+    }
+
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == CAMERA_PERMISSION_REQUEST) {
@@ -216,10 +271,12 @@ class MainActivity : AppCompatActivity() {
         if (page == Page.HOME) {
             pageContainer.visibility = View.GONE
             homeContentViews.forEach { it.visibility = View.VISIBLE }
+            updateHomeReminderNotice()
             titleText.text = getString(R.string.title_dashboard)
             return true
         }
 
+        reminderHomeNotice?.visibility = View.GONE
         homeContentViews.forEach { it.visibility = View.GONE }
         pageContainer.visibility = View.VISIBLE
         pageContainer.removeAllViews()
@@ -504,17 +561,223 @@ class MainActivity : AppCompatActivity() {
 
     private fun buildSettingsPage() {
         pageContainer.addView(pageText(getString(R.string.settings_page_intro), 16f, true))
+        val settings = reminderSettingsStore.load()
         val notifications = Switch(this).apply {
             text = getString(R.string.settings_notifications)
-            isChecked = true
+            isChecked = settings.enabled
             setTextColor(if (isDarkTheme) Color.WHITE else Color.parseColor("#1C2430"))
         }
+        reminderSwitch = notifications
+        notifications.setOnCheckedChangeListener { _, checked ->
+            if (updatingReminderSwitch) return@setOnCheckedChangeListener
+            if (checked) {
+                setReminderSwitchChecked(false)
+                beginReminderEnable(notifications)
+            } else {
+                disableMealReminders()
+            }
+        }
         pageContainer.addView(notifications)
+        reminderOptions = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = if (settings.enabled) View.VISIBLE else View.GONE
+        }
+        pageContainer.addView(reminderOptions)
+        renderReminderOptions()
         val dailyLimit = Button(this).apply {
             text = getString(R.string.settings_daily_limit)
             setOnClickListener { }
         }
         pageContainer.addView(dailyLimit)
+    }
+
+    private fun initializeHomeReminderNotice() {
+        reminderHomeNotice = TextView(this).apply {
+            text = getString(R.string.home_reminder_notice)
+            textSize = 14f
+            setTextColor(Color.parseColor("#1C5DD9"))
+            setPadding(16.dp(), 14.dp(), 16.dp(), 14.dp())
+            background = GradientDrawable().apply {
+                cornerRadius = 8.dp().toFloat()
+                setColor(Color.parseColor("#E6F0FF"))
+            }
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { bottomNav.selectedItemId = R.id.nav_settings }
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(16.dp(), 12.dp(), 16.dp(), 0) }
+        }
+        rootLayout.addView(reminderHomeNotice, 2)
+        updateHomeReminderNotice()
+    }
+
+    private fun updateHomeReminderNotice() {
+        reminderHomeNotice?.visibility = if (
+            currentPage == Page.HOME && !reminderSettingsStore.load().enabled
+        ) View.VISIBLE else View.GONE
+    }
+
+    private fun beginReminderEnable(toggle: Switch) {
+        reminderSwitch = toggle
+        pendingReminderEnable = true
+        continueReminderEnableFlow()
+    }
+
+    private fun continueReminderEnableFlow() {
+        if (!pendingReminderEnable) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
+        }
+        if (!MealReminderScheduler.hasExactAlarmAccess(this)) {
+            val request = Intent(
+                Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                Uri.parse("package:$packageName")
+            )
+            exactAlarmSettingsLauncher.launch(request)
+            return
+        }
+
+        pendingReminderEnable = false
+        val settings = reminderSettingsStore.load()
+        if (settings.hasConfiguredMeals) {
+            enableMealReminders(settings)
+        } else {
+            showMealCountOptIn()
+        }
+    }
+
+    private fun showMealCountOptIn() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.reminder_choose_meal_count_title)
+            .setMessage(R.string.reminder_choose_meal_count_message)
+            .setPositiveButton(R.string.reminder_choose_meal_count) { _, _ -> showMealCountPicker(null) }
+            .setNegativeButton(R.string.reminder_keep_default) { _, _ ->
+                val settings = reminderSettingsStore.load()
+                enableMealReminders(
+                    settings.copy(
+                        mealTimesMinutes = ReminderTimeCalculator.defaultTimes(settings.mealCount),
+                        hasConfiguredMeals = true
+                    )
+                )
+            }
+            .setOnCancelListener { setReminderSwitchChecked(false) }
+            .show()
+    }
+
+    private fun showMealCountPicker(currentCount: Int?) {
+        val picker = NumberPicker(this).apply {
+            minValue = ReminderTimeCalculator.MIN_MEALS
+            maxValue = ReminderTimeCalculator.MAX_MEALS
+            value = currentCount ?: ReminderTimeCalculator.DEFAULT_MEALS
+            wrapSelectorWheel = false
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.reminder_meal_count_title)
+            .setView(picker)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val oldSettings = reminderSettingsStore.load()
+                val newSettings = oldSettings.copy(
+                    mealCount = picker.value,
+                    mealTimesMinutes = ReminderTimeCalculator.defaultTimes(picker.value),
+                    hasConfiguredMeals = true
+                )
+                if (oldSettings.enabled) {
+                    saveMealReminderSettings(newSettings)
+                } else {
+                    enableMealReminders(newSettings)
+                }
+            }
+            .setNegativeButton(android.R.string.cancel) { _, _ ->
+                if (currentCount == null) setReminderSwitchChecked(false)
+            }
+            .setOnCancelListener {
+                if (currentCount == null) setReminderSwitchChecked(false)
+            }
+            .show()
+    }
+
+    private fun enableMealReminders(settings: MealReminderSettings) {
+        if (!reminderPermissionsGranted()) {
+            setReminderSwitchChecked(false)
+            Toast.makeText(this, R.string.reminder_permissions_required, Toast.LENGTH_LONG).show()
+            return
+        }
+        saveMealReminderSettings(settings.copy(enabled = true, hasConfiguredMeals = true))
+    }
+
+    private fun disableMealReminders() {
+        pendingReminderEnable = false
+        reminderSettingsStore.save(reminderSettingsStore.load().copy(enabled = false))
+        MealReminderScheduler.cancelAll(this)
+        reminderOptions?.visibility = View.GONE
+        updateHomeReminderNotice()
+    }
+
+    private fun saveMealReminderSettings(settings: MealReminderSettings) {
+        reminderSettingsStore.save(settings)
+        if (settings.enabled) MealReminderScheduler.scheduleAll(this) else MealReminderScheduler.cancelAll(this)
+        setReminderSwitchChecked(settings.enabled)
+        reminderOptions?.visibility = if (settings.enabled) View.VISIBLE else View.GONE
+        renderReminderOptions()
+        updateHomeReminderNotice()
+    }
+
+    private fun renderReminderOptions() {
+        val container = reminderOptions ?: return
+        val settings = reminderSettingsStore.load()
+        container.removeAllViews()
+
+        container.addView(Button(this).apply {
+            text = getString(R.string.reminder_meal_count_label, settings.mealCount)
+            setOnClickListener { showMealCountPicker(settings.mealCount) }
+        })
+
+        settings.mealTimesMinutes.forEachIndexed { index, minutes ->
+            container.addView(Button(this).apply {
+                text = getString(R.string.reminder_meal_time_label, index + 1, formatMealTime(minutes))
+                setOnClickListener {
+                    TimePickerDialog(
+                        this@MainActivity,
+                        { _, hour, minute ->
+                            val updatedTimes = settings.mealTimesMinutes.toMutableList()
+                            updatedTimes[index] = hour * 60 + minute
+                            saveMealReminderSettings(settings.copy(mealTimesMinutes = updatedTimes))
+                        },
+                        minutes / 60,
+                        minutes % 60,
+                        true
+                    ).show()
+                }
+            })
+        }
+    }
+
+    private fun formatMealTime(minutes: Int): String =
+        String.format(Locale.ROOT, "%02d:%02d", minutes / 60, minutes % 60)
+
+    private fun setReminderSwitchChecked(checked: Boolean) {
+        updatingReminderSwitch = true
+        reminderSwitch?.isChecked = checked
+        updatingReminderSwitch = false
+    }
+
+    private fun reminderPermissionsGranted(): Boolean {
+        val notificationsGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        return notificationsGranted && MealReminderScheduler.hasExactAlarmAccess(this)
+    }
+
+    private fun rejectReminderEnable() {
+        pendingReminderEnable = false
+        setReminderSwitchChecked(false)
+        Toast.makeText(this, R.string.reminder_permissions_required, Toast.LENGTH_LONG).show()
     }
 
     private fun pageText(text: String, size: Float, bold: Boolean): TextView = TextView(this).apply {

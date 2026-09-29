@@ -50,5 +50,17 @@
     <string name="details_vitamins">Witaminy · A, C, D</string>
     <string name="settings_page_intro">Dostosuj działanie aplikacji</string>
     <string name="settings_notifications">Przypomnienia o posiłkach</string>
+    <string name="meal_reminder_channel">Przypomnienia o posiłkach</string>
+    <string name="meal_reminder_title">Posiłek %1$d</string>
+    <string name="meal_reminder_message">Czas na zaplanowany posiłek.</string>
+    <string name="home_reminder_notice">Włącz przypomnienia o porach posiłków</string>
+    <string name="reminder_choose_meal_count_title">Przypomnienia o posiłkach</string>
+    <string name="reminder_choose_meal_count_message">Czy chcesz określić liczbę posiłków? Domyślnie ustawione są 3.</string>
+    <string name="reminder_choose_meal_count">Wybierz liczbę</string>
+    <string name="reminder_keep_default">Pozostaw 3</string>
+    <string name="reminder_meal_count_title">Liczba posiłków</string>
+    <string name="reminder_meal_count_label">Liczba posiłków: %1$d</string>
+    <string name="reminder_meal_time_label">Posiłek %1$d · %2$s</string>
+    <string name="reminder_permissions_required">Aby włączyć przypomnienia, zezwól na powiadomienia i dokładne alarmy w ustawieniach Androida.</string>
     <string name="settings_daily_limit">Limit dzienny · 2200 kcal</string>
 </resources>

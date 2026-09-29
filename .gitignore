@@ -28,3 +28,4 @@ externalNativeBuild/
 Thumbs.db
 Desktop.ini
 *.bin
+.github/
