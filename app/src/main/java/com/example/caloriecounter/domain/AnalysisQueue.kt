@@ -19,7 +19,8 @@ class AnalysisQueue(context: Context) {
 
     suspend fun enqueueText(text: String): Long = enqueue(repository.enqueueText(text))
 
-    suspend fun enqueuePhoto(imageBytes: ByteArray): Long = enqueue(repository.enqueuePhoto(imageBytes))
+    suspend fun enqueuePhoto(imageBytes: ByteArray, photoId: Long? = null, note: String? = null): Long =
+        enqueue(repository.enqueuePhoto(imageBytes, photoId, note))
 
     private fun enqueue(jobId: Long): Long {
         val request = OneTimeWorkRequestBuilder<MealAnalysisWorker>()

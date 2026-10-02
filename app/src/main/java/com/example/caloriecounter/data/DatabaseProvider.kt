@@ -12,6 +12,6 @@ object DatabaseProvider {
             context.applicationContext,
             AppDatabase::class.java,
             "calorie-counter.db"
-        ).addMigrations(AppDatabase.MIGRATION_1_2).build().also { instance = it }
+        ).addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3).build().also { instance = it }
     }
 }

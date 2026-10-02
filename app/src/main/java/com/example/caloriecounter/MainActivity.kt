@@ -30,6 +30,7 @@ import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.NumberPicker
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
@@ -58,33 +59,26 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.google.android.material.bottomnavigation.BottomNavigationView
-import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import com.example.caloriecounter.data.DatabaseProvider
+import com.example.caloriecounter.data.JobStatus
 import com.example.caloriecounter.data.MealRepository
+import com.example.caloriecounter.data.PhotoAnalysisDetails
 import com.example.caloriecounter.data.PhotoHistoryEntity
+import com.example.caloriecounter.domain.AnalysisQueue
 import com.example.caloriecounter.reminders.MealReminderScheduler
 import com.example.caloriecounter.reminders.MealReminderSettings
 import com.example.caloriecounter.reminders.MealReminderSettingsStore
 import com.example.caloriecounter.reminders.ReminderTimeCalculator
 import kotlinx.coroutines.launch
+import org.json.JSONArray
 import java.io.ByteArrayInputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
-
-    private enum class ThemeRole {
-        PRIMARY_TEXT,
-        SECONDARY_TEXT,
-        ACCENT_NOTICE,
-        SURFACE,
-        DROPDOWN_OPTION,
-        DROPDOWN_SELECTED_OPTION,
-        REMINDER_TIME_BUTTON
-    }
 
     private var dailyLimit = DEFAULT_DAILY_LIMIT
     private var dailyLimitSummaryView: TextView? = null
@@ -136,16 +130,13 @@ class MainActivity : AppCompatActivity() {
     private var photoHistory: List<PhotoHistoryEntity> = emptyList()
     private var cameraEnabled = true
     private var pendingPhotoNote: String? = null
+    private var photoDetailsJob: kotlinx.coroutines.Job? = null
     private var currentPage = Page.HOME
     private var detailsReturnPage = Page.HISTORY
     private lateinit var detailsBackCallback: OnBackPressedCallback
     private var reminderSwitch: Switch? = null
     private var reminderOptions: LinearLayout? = null
-    private var mealCountInput: TextInputEditText? = null
-    private var mealCountSelectorLayout: TextInputLayout? = null
-    private var mealCountDropdown: LinearLayout? = null
     private var reminderHomeNotice: TextView? = null
-    private var activeThemeDialog: android.app.Dialog? = null
     private var updatingReminderSwitch = false
     private var pendingReminderEnable = false
     private val reminderSettingsStore by lazy { MealReminderSettingsStore(applicationContext) }
@@ -171,7 +162,6 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         dailyLimit = appSettings.getInt(KEY_DAILY_LIMIT, DEFAULT_DAILY_LIMIT).coerceAtLeast(1)
-        isDarkTheme = appSettings.getBoolean(KEY_DARK_THEME, false)
         setContentView(R.layout.activity_main)
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootLayout)) { view, insets ->
@@ -213,7 +203,6 @@ class MainActivity : AppCompatActivity() {
 
         themeToggle.setOnClickListener {
             isDarkTheme = !isDarkTheme
-            appSettings.edit().putBoolean(KEY_DARK_THEME, isDarkTheme).apply()
             updateTheme()
             buildChart()
         }
@@ -287,6 +276,7 @@ class MainActivity : AppCompatActivity() {
     private enum class Page { HOME, SCAN, HISTORY, SETTINGS, REMINDER_SETTINGS, LIMIT_SETTINGS, DETAILS }
 
     private fun showPage(page: Page): Boolean {
+        photoDetailsJob?.cancel()
         if (currentPage == Page.LIMIT_SETTINGS) savePendingDailyLimit()
         detailsBackCallback.isEnabled = false
         closeCamera()
@@ -330,7 +320,6 @@ class MainActivity : AppCompatActivity() {
             }
             Page.HOME, Page.DETAILS -> Unit
         }
-        applyThemeToViewTree(rootLayout)
         return true
     }
 
@@ -357,6 +346,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildPhotoDetails(photo: PhotoHistoryEntity) {
+        photoDetailsJob?.cancel()
+
         pageContainer.addView(Button(this).apply {
             text = getString(R.string.details_back)
             isAllCaps = false
@@ -394,26 +385,98 @@ class MainActivity : AppCompatActivity() {
             content.addView(pageText(note, 16f, true).apply { setPadding(0, 8.dp(), 0, 0) })
         }
 
-        content.addView(pageText(getString(R.string.details_mock_notice), 13f, false).apply {
-            setPadding(0, 20.dp(), 0, 8.dp())
-        })
-        content.addView(pageText(getString(R.string.details_mock_meal_name), 22f, true))
-        content.addView(pageText(getString(R.string.details_mock_calories), 28f, true).apply {
-            setPadding(0, 4.dp(), 0, 12.dp())
-        })
-        listOf(
-            R.string.details_protein,
-            R.string.details_carbohydrates,
-            R.string.details_fat,
-            R.string.details_fiber,
-            R.string.details_vitamins
-        ).forEach { value ->
-            content.addView(pageText(getString(value), 16f, false).apply {
-                setPadding(0, 6.dp(), 0, 6.dp())
-            })
+        val analysisContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 16.dp(), 0, 0)
         }
+        content.addView(analysisContainer)
         scrollView.addView(content)
         pageContainer.addView(scrollView)
+
+        photoDetailsJob = lifecycleScope.launch {
+            mealRepository.observeAnalysisForPhoto(photo.id).collect { details ->
+                renderPhotoAnalysisDetails(photo, details, analysisContainer)
+            }
+        }
+    }
+
+    private fun renderPhotoAnalysisDetails(
+        photo: PhotoHistoryEntity,
+        details: PhotoAnalysisDetails,
+        container: LinearLayout
+    ) {
+        container.removeAllViews()
+        val summary = details.summary
+        val job = details.job
+
+        if (summary != null) {
+            container.addView(pageText(summary.title, 22f, true))
+            container.addView(pageText("${summary.caloriesKcal} kcal", 28f, true).apply {
+                setPadding(0, 4.dp(), 0, 12.dp())
+            })
+            container.addView(pageText(getString(R.string.details_protein_template, summary.proteinGrams), 16f, false).apply { setPadding(0, 6.dp(), 0, 6.dp()) })
+            container.addView(pageText(getString(R.string.details_carbs_template, summary.carbohydratesGrams), 16f, false).apply { setPadding(0, 6.dp(), 0, 6.dp()) })
+            container.addView(pageText(getString(R.string.details_fat_template, summary.fatGrams), 16f, false).apply { setPadding(0, 6.dp(), 0, 6.dp()) })
+            container.addView(pageText(getString(R.string.details_fiber_template, summary.fiberGrams), 16f, false).apply { setPadding(0, 6.dp(), 0, 6.dp()) })
+
+            val vitaminsList = try {
+                val array = JSONArray(summary.vitaminsJson)
+                (0 until array.length()).map { array.getString(it) }.joinToString(", ")
+            } catch (_: Exception) {
+                ""
+            }
+            if (vitaminsList.isNotEmpty()) {
+                container.addView(pageText(getString(R.string.details_vitamins_template, vitaminsList), 16f, false).apply { setPadding(0, 6.dp(), 0, 6.dp()) })
+            }
+        } else if (job != null) {
+            when (job.status) {
+                JobStatus.QUEUED, JobStatus.PROCESSING -> {
+                    container.addView(pageText(getString(R.string.meal_analysis_processing), 18f, true).apply {
+                        setPadding(0, 12.dp(), 0, 8.dp())
+                    })
+                }
+                JobStatus.FAILED -> {
+                    val isModelMissing = job.errorMessage?.contains("Gemma model is not installed") == true
+                    val message = if (isModelMissing) {
+                        getString(R.string.meal_analysis_model_missing)
+                    } else {
+                        val detailsMsg = job.errorMessage?.takeIf { it.isNotBlank() } ?: ""
+                        if (detailsMsg.isNotEmpty()) {
+                            "${getString(R.string.meal_analysis_failed)} ($detailsMsg)"
+                        } else {
+                            getString(R.string.meal_analysis_failed)
+                        }
+                    }
+                    container.addView(pageText(message, 16f, false).apply {
+                        setTextColor(Color.parseColor("#E53935"))
+                        setPadding(0, 12.dp(), 0, 12.dp())
+                    })
+                    container.addView(Button(this).apply {
+                        text = getString(R.string.meal_analysis_retry)
+                        isAllCaps = false
+                        setOnClickListener {
+                            lifecycleScope.launch {
+                                AnalysisQueue(applicationContext).enqueuePhoto(photo.imageBytes, photo.id, photo.note)
+                            }
+                        }
+                    })
+                }
+                else -> Unit
+            }
+        } else {
+            container.addView(pageText(getString(R.string.meal_analysis_no_analysis), 15f, false).apply {
+                setPadding(0, 12.dp(), 0, 12.dp())
+            })
+            container.addView(Button(this).apply {
+                text = getString(R.string.meal_analysis_start)
+                isAllCaps = false
+                setOnClickListener {
+                    lifecycleScope.launch {
+                        AnalysisQueue(applicationContext).enqueuePhoto(photo.imageBytes, photo.id, photo.note)
+                    }
+                }
+            })
+        }
     }
 
     private fun buildScanPage() {
@@ -558,12 +621,12 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(10.dp(), 10.dp(), 8.dp(), 10.dp())
+                background = ColorDrawable(if (isDarkTheme) Color.parseColor("#1F2937") else Color.WHITE)
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply { setMargins(0, 12.dp(), 0, 0) }
             }
-            setThemeRole(row, ThemeRole.SURFACE)
             val thumbnail = ImageView(this).apply {
                 layoutParams = LinearLayout.LayoutParams(76.dp(), 76.dp())
                 scaleType = ImageView.ScaleType.CENTER_CROP
@@ -636,7 +699,6 @@ class MainActivity : AppCompatActivity() {
             cornerRadius = 8.dp().toFloat()
             setColor(if (isDarkTheme) Color.parseColor("#1F2937") else Color.WHITE)
         }
-        setThemeRole(this, ThemeRole.SURFACE)
         isClickable = true
         isFocusable = true
         contentDescription = "$title. $summary"
@@ -659,26 +721,18 @@ class MainActivity : AppCompatActivity() {
             text = "›"
             textSize = 28f
             gravity = Gravity.CENTER
-            setThemeRole(this, ThemeRole.SECONDARY_TEXT)
+            setTextColor(if (isDarkTheme) Color.parseColor("#D1D5DB") else Color.parseColor("#697586"))
         }, LinearLayout.LayoutParams(32.dp(), ViewGroup.LayoutParams.MATCH_PARENT))
         setOnClickListener { onClick() }
     }
 
     private fun addSettingsBackButton() {
-        pageContainer.addView(MaterialButton(this).apply {
-            text = getString(R.string.settings_back)
-            isAllCaps = false
-            icon = ContextCompat.getDrawable(this@MainActivity, R.drawable.ic_arrow_back_24)
-            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
-            iconPadding = 8.dp()
-            iconTint = ColorStateList.valueOf(if (isDarkTheme) Color.WHITE else Color.parseColor("#1C2430"))
+        pageContainer.addView(ImageButton(this).apply {
+            setImageResource(android.R.drawable.ic_media_previous)
             contentDescription = getString(R.string.settings_back)
-            minHeight = 48.dp()
+            background = ColorDrawable(Color.TRANSPARENT)
             setOnClickListener { showPage(detailsReturnPage) }
-        }, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            48.dp()
-        ).apply { setMargins(0, 0, 0, 8.dp()) })
+        }, LinearLayout.LayoutParams(48.dp(), 48.dp()))
     }
 
     private fun buildReminderSettingsPage() {
@@ -807,12 +861,12 @@ class MainActivity : AppCompatActivity() {
         reminderHomeNotice = TextView(this).apply {
             text = getString(R.string.home_reminder_notice)
             textSize = 14f
+            setTextColor(Color.parseColor("#1C5DD9"))
             setPadding(16.dp(), 14.dp(), 16.dp(), 14.dp())
             background = GradientDrawable().apply {
                 cornerRadius = 8.dp().toFloat()
                 setColor(Color.parseColor("#E6F0FF"))
             }
-            setThemeRole(this, ThemeRole.ACCENT_NOTICE)
             isClickable = true
             isFocusable = true
             setOnClickListener { bottomNav.selectedItemId = R.id.nav_settings }
@@ -865,14 +919,53 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showMealCountOptIn() {
-        val settings = reminderSettingsStore.load()
-        enableMealReminders(
-            settings.copy(
-                mealCount = ReminderTimeCalculator.DEFAULT_MEALS,
-                mealTimesMinutes = ReminderTimeCalculator.defaultTimes(ReminderTimeCalculator.DEFAULT_MEALS),
-                hasConfiguredMeals = true
-            )
-        )
+        AlertDialog.Builder(this)
+            .setTitle(R.string.reminder_choose_meal_count_title)
+            .setMessage(R.string.reminder_choose_meal_count_message)
+            .setPositiveButton(R.string.reminder_choose_meal_count) { _, _ -> showMealCountPicker(null) }
+            .setNegativeButton(R.string.reminder_keep_default) { _, _ ->
+                val settings = reminderSettingsStore.load()
+                enableMealReminders(
+                    settings.copy(
+                        mealTimesMinutes = ReminderTimeCalculator.defaultTimes(settings.mealCount),
+                        hasConfiguredMeals = true
+                    )
+                )
+            }
+            .setOnCancelListener { setReminderSwitchChecked(false) }
+            .show()
+    }
+
+    private fun showMealCountPicker(currentCount: Int?) {
+        val picker = NumberPicker(this).apply {
+            minValue = ReminderTimeCalculator.MIN_MEALS
+            maxValue = ReminderTimeCalculator.MAX_MEALS
+            value = currentCount ?: ReminderTimeCalculator.DEFAULT_MEALS
+            wrapSelectorWheel = false
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.reminder_meal_count_title)
+            .setView(picker)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val oldSettings = reminderSettingsStore.load()
+                val newSettings = oldSettings.copy(
+                    mealCount = picker.value,
+                    mealTimesMinutes = ReminderTimeCalculator.defaultTimes(picker.value),
+                    hasConfiguredMeals = true
+                )
+                if (oldSettings.enabled) {
+                    saveMealReminderSettings(newSettings)
+                } else {
+                    enableMealReminders(newSettings)
+                }
+            }
+            .setNegativeButton(android.R.string.cancel) { _, _ ->
+                if (currentCount == null) setReminderSwitchChecked(false)
+            }
+            .setOnCancelListener {
+                if (currentCount == null) setReminderSwitchChecked(false)
+            }
+            .show()
     }
 
     private fun enableMealReminders(settings: MealReminderSettings) {
@@ -906,79 +999,16 @@ class MainActivity : AppCompatActivity() {
         val settings = reminderSettingsStore.load()
         container.removeAllViews()
 
-        val selectorInput = TextInputEditText(this).apply {
-            setText(settings.mealCount.toString())
-            isFocusable = false
-            isCursorVisible = false
-            isClickable = true
-            setOnClickListener { toggleMealCountDropdown() }
-        }
-        mealCountInput = selectorInput
-        val selectorLayout = TextInputLayout(this).apply {
-            hint = getString(R.string.reminder_meal_count_title)
-            boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
-            endIconMode = TextInputLayout.END_ICON_CUSTOM
-            setEndIconDrawable(R.drawable.ic_expand_more_24)
-            setEndIconOnClickListener { toggleMealCountDropdown() }
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(0, 8.dp(), 0, 8.dp()) }
-            addView(selectorInput)
-        }
-        mealCountSelectorLayout = selectorLayout
-        container.addView(selectorLayout)
-
-        val dropdown = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = View.GONE
-            background = ColorDrawable(if (isDarkTheme) Color.parseColor("#1F2937") else Color.WHITE)
-            setThemeRole(this, ThemeRole.SURFACE)
-            elevation = 4.dp().toFloat()
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(0, 0, 0, 8.dp()) }
-        }
-        mealCountDropdown = dropdown
-        (ReminderTimeCalculator.MIN_MEALS..ReminderTimeCalculator.MAX_MEALS).forEach { count ->
-            val option = TextView(this).apply {
-                text = count.toString()
-                gravity = Gravity.CENTER_VERTICAL
-                textSize = 16f
-                setPadding(16.dp(), 0, 16.dp(), 0)
-                layoutParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    52.dp()
-                )
-                setThemeRole(
-                    this,
-                    if (count == settings.mealCount) ThemeRole.DROPDOWN_SELECTED_OPTION
-                    else ThemeRole.DROPDOWN_OPTION
-                )
-                isClickable = true
-                isFocusable = true
-                setOnClickListener {
-                    val latestSettings = reminderSettingsStore.load()
-                    saveMealReminderSettings(
-                        latestSettings.copy(
-                            mealCount = count,
-                            mealTimesMinutes = ReminderTimeCalculator.defaultTimes(count),
-                            hasConfiguredMeals = true
-                        )
-                    )
-                }
-            }
-            dropdown.addView(option)
-        }
-        container.addView(dropdown)
+        container.addView(Button(this).apply {
+            text = getString(R.string.reminder_meal_count_label, settings.mealCount)
+            setOnClickListener { showMealCountPicker(settings.mealCount) }
+        })
 
         settings.mealTimesMinutes.forEachIndexed { index, minutes ->
             container.addView(Button(this).apply {
                 text = getString(R.string.reminder_meal_time_label, index + 1, formatMealTime(minutes))
-                setThemeRole(this, ThemeRole.REMINDER_TIME_BUTTON)
                 setOnClickListener {
-                    val dialog = TimePickerDialog(
+                    TimePickerDialog(
                         this@MainActivity,
                         { _, hour, minute ->
                             val updatedTimes = settings.mealTimesMinutes.toMutableList()
@@ -988,19 +1018,10 @@ class MainActivity : AppCompatActivity() {
                         minutes / 60,
                         minutes % 60,
                         true
-                    )
-                    showThemedDialog(dialog)
+                    ).show()
                 }
             })
         }
-
-        applyThemeToViewTree(container)
-    }
-
-    private fun toggleMealCountDropdown() {
-        val dropdown = mealCountDropdown ?: return
-        val expanded = dropdown.visibility != View.VISIBLE
-        dropdown.visibility = if (expanded) View.VISIBLE else View.GONE
     }
 
     private fun formatMealTime(minutes: Int): String =
@@ -1030,147 +1051,6 @@ class MainActivity : AppCompatActivity() {
         textSize = size
         setTextColor(if (isDarkTheme) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430"))
         if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
-        setThemeRole(this, if (bold) ThemeRole.PRIMARY_TEXT else ThemeRole.SECONDARY_TEXT)
-    }
-
-    private fun setThemeRole(view: View, role: ThemeRole) {
-        view.tag = role
-        applyThemeRole(view, role)
-    }
-
-    private fun applyThemeRole(view: View, role: ThemeRole) {
-        when (role) {
-            ThemeRole.PRIMARY_TEXT -> (view as? TextView)?.setTextColor(
-                if (isDarkTheme) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430")
-            )
-            ThemeRole.SECONDARY_TEXT -> (view as? TextView)?.setTextColor(
-                if (isDarkTheme) Color.parseColor("#D1D5DB") else Color.parseColor("#697586")
-            )
-            ThemeRole.ACCENT_NOTICE -> {
-                (view as? TextView)?.setTextColor(
-                    if (isDarkTheme) Color.parseColor("#B5E0FF") else Color.parseColor("#1C5DD9")
-                )
-                setViewBackgroundColor(
-                    view,
-                    if (isDarkTheme) Color.parseColor("#1B3A5B") else Color.parseColor("#E6F0FF")
-                )
-            }
-            ThemeRole.SURFACE -> setViewBackgroundColor(
-                view,
-                if (isDarkTheme) Color.parseColor("#1F2937") else Color.WHITE
-            )
-            ThemeRole.DROPDOWN_OPTION -> {
-                (view as? TextView)?.setTextColor(
-                    if (isDarkTheme) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430")
-                )
-                setViewBackgroundColor(view, if (isDarkTheme) Color.parseColor("#1F2937") else Color.WHITE)
-            }
-            ThemeRole.DROPDOWN_SELECTED_OPTION -> {
-                (view as? TextView)?.setTextColor(
-                    if (isDarkTheme) Color.parseColor("#B5E0FF") else Color.parseColor("#1C5DD9")
-                )
-                setViewBackgroundColor(
-                    view,
-                    if (isDarkTheme) Color.parseColor("#1B3A5B") else Color.parseColor("#E6F0FF")
-                )
-            }
-            ThemeRole.REMINDER_TIME_BUTTON -> (view as? Button)?.apply {
-                backgroundTintList = ColorStateList.valueOf(
-                    if (isDarkTheme) Color.parseColor("#1B3A5B") else Color.parseColor("#E6F0FF")
-                )
-                setTextColor(
-                    if (isDarkTheme) Color.parseColor("#B5E0FF") else Color.parseColor("#1C5DD9")
-                )
-            }
-        }
-    }
-
-    private fun setViewBackgroundColor(view: View, color: Int) {
-        when (val drawable = view.background?.mutate()) {
-            is GradientDrawable -> drawable.setColor(color)
-            is ColorDrawable -> drawable.color = color
-            null -> view.setBackgroundColor(color)
-            else -> drawable.setTint(color)
-        }
-    }
-
-    private fun applyThemeToViewTree(view: View) {
-        (view.tag as? ThemeRole)?.let { applyThemeRole(view, it) }
-        when (view) {
-            is Button -> if (view.tag != ThemeRole.REMINDER_TIME_BUTTON) {
-                view.backgroundTintList = ColorStateList.valueOf(
-                    if (isDarkTheme) Color.parseColor("#2F3B52") else Color.parseColor("#E5E7EB")
-                )
-                view.setTextColor(if (isDarkTheme) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430"))
-                if (view is MaterialButton) {
-                    view.iconTint = ColorStateList.valueOf(
-                        if (isDarkTheme) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430")
-                    )
-                }
-            }
-            is ImageButton -> if (view.id != R.id.themeToggle) {
-                view.imageTintList = ColorStateList.valueOf(
-                    if (isDarkTheme) Color.parseColor("#F3F4F6") else Color.parseColor("#111827")
-                )
-            }
-            is Switch -> view.setTextColor(
-                if (isDarkTheme) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430")
-            ).also {
-                view.thumbTintList = ColorStateList.valueOf(if (isDarkTheme) Color.parseColor("#80CBC4") else Color.parseColor("#2E7D32"))
-                view.trackTintList = ColorStateList.valueOf(if (isDarkTheme) Color.parseColor("#52606D") else Color.parseColor("#B0BEC5"))
-            }
-            is TextInputLayout -> applyThemeToInput(view)
-        }
-        if (view is ViewGroup) {
-            for (index in 0 until view.childCount) applyThemeToViewTree(view.getChildAt(index))
-        }
-    }
-
-    private fun showThemedDialog(dialog: android.app.Dialog) {
-        activeThemeDialog = dialog
-        dialog.setOnDismissListener {
-            if (activeThemeDialog === dialog) activeThemeDialog = null
-        }
-        dialog.setOnShowListener { applyThemeToDialog(dialog) }
-        dialog.show()
-    }
-
-    private fun applyThemeToDialog(dialog: android.app.Dialog) {
-        dialog.window?.setBackgroundDrawable(ColorDrawable(
-            if (isDarkTheme) Color.parseColor("#1F2937") else Color.WHITE
-        ))
-        val decor = dialog.window?.decorView ?: return
-        applyThemeToViewTree(decor)
-        updateDialogTextColors(decor)
-        dialog.findViewById<TextView>(android.R.id.message)?.setTextColor(
-            if (isDarkTheme) Color.parseColor("#D1D5DB") else Color.parseColor("#697586")
-        )
-    }
-
-    private fun updateDialogTextColors(view: View) {
-        if (view is TextView && view.tag !is ThemeRole && view !is Button) {
-            view.setTextColor(if (isDarkTheme) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430"))
-        }
-        if (view is ViewGroup) {
-            for (index in 0 until view.childCount) updateDialogTextColors(view.getChildAt(index))
-        }
-    }
-
-    private fun applyThemeToInput(input: TextInputLayout) {
-        val fieldBackground = if (isDarkTheme) Color.parseColor("#1F2937") else Color.WHITE
-        val fieldText = if (isDarkTheme) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430")
-        val fieldHint = if (isDarkTheme) Color.parseColor("#D1D5DB") else Color.parseColor("#58677A")
-        val dropdownIconColor = if (isDarkTheme) Color.parseColor("#F3F4F6") else Color.parseColor("#58677A")
-        input.setBoxBackgroundColor(fieldBackground)
-        input.boxStrokeColor = if (isDarkTheme) Color.parseColor("#8291A5") else Color.parseColor("#65758B")
-        input.boxStrokeWidth = 1.dp()
-        input.boxStrokeWidthFocused = 2.dp()
-        input.defaultHintTextColor = ColorStateList.valueOf(fieldHint)
-        input.setEndIconTintList(ColorStateList.valueOf(dropdownIconColor))
-        input.editText?.apply {
-            setTextColor(fieldText)
-            setHintTextColor(fieldHint)
-        }
     }
 
     private fun decodeOrientedPhoto(imageBytes: ByteArray): android.graphics.Bitmap? {
@@ -1358,6 +1238,7 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val photo = mealRepository.savePhoto(imageBytes, note)
+                AnalysisQueue(applicationContext).enqueuePhoto(imageBytes, photo.id, note)
                 android.widget.Toast.makeText(
                     this@MainActivity,
                     R.string.photo_saved,
@@ -1465,7 +1346,6 @@ class MainActivity : AppCompatActivity() {
         private const val DEFAULT_DAILY_LIMIT = 2200
         private const val APP_SETTINGS_PREFERENCES = "calorie_counter_settings"
         private const val KEY_DAILY_LIMIT = "daily_limit"
-        private const val KEY_DARK_THEME = "dark_theme"
         private const val DAILY_LIMIT_SAVE_DELAY_MS = 500L
     }
 
@@ -1548,8 +1428,23 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<TextView>(R.id.scanHint).setTextColor(if (isDarkTheme) Color.parseColor("#B5E0FF") else Color.parseColor("#1C5DD9"))
         findViewById<View>(R.id.scanHint).setBackgroundColor(if (isDarkTheme) Color.parseColor("#1B3A5B") else Color.parseColor("#E6F0FF"))
-        applyThemeToViewTree(rootLayout)
-        activeThemeDialog?.let(::applyThemeToDialog)
+
+        scanDetailsInputLayout?.apply {
+            val fieldBackground = if (isDarkTheme) Color.parseColor("#1F2937") else Color.WHITE
+            val fieldText = if (isDarkTheme) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430")
+            val fieldHint = if (isDarkTheme) Color.parseColor("#D1D5DB") else Color.parseColor("#58677A")
+            val fieldStroke = if (isDarkTheme) Color.parseColor("#8291A5") else Color.parseColor("#65758B")
+
+            setBoxBackgroundColor(fieldBackground)
+            boxStrokeColor = fieldStroke
+            boxStrokeWidth = 1.dp()
+            boxStrokeWidthFocused = 2.dp()
+            defaultHintTextColor = ColorStateList.valueOf(fieldHint)
+            editText?.apply {
+                setTextColor(fieldText)
+                setHintTextColor(fieldHint)
+            }
+        }
     }
 
     private fun buildChart() {

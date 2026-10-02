@@ -23,7 +23,7 @@ class DatabaseConverters {
 
 @Database(
     entities = [AnalysisJobEntity::class, MealSummaryEntity::class, PhotoHistoryEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(DatabaseConverters::class)
@@ -36,6 +36,13 @@ abstract class AppDatabase : RoomDatabase() {
                 database.execSQL(
                     """CREATE TABLE IF NOT EXISTS `photo_history` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `imageBytes` BLOB NOT NULL, `note` TEXT, `createdAt` INTEGER NOT NULL)"""
                 )
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE `analysis_jobs` ADD COLUMN `photoHistoryId` INTEGER")
+                database.execSQL("ALTER TABLE `analysis_jobs` ADD COLUMN `analysisNote` TEXT")
             }
         }
     }

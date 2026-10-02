@@ -9,6 +9,8 @@ data class AnalysisJobEntity(
     val inputType: InputType,
     val textInput: String? = null,
     val imageBytes: ByteArray? = null,
+    val photoHistoryId: Long? = null,
+    val analysisNote: String? = null,
     val status: JobStatus = JobStatus.QUEUED,
     val errorMessage: String? = null,
     val createdAt: Long = System.currentTimeMillis(),

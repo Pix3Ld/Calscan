@@ -14,6 +14,9 @@ interface MealDao {
     @Query("SELECT * FROM analysis_jobs WHERE id = :jobId")
     suspend fun getJob(jobId: Long): AnalysisJobEntity?
 
+    @Query("SELECT * FROM analysis_jobs WHERE photoHistoryId = :photoId ORDER BY createdAt DESC LIMIT 1")
+    fun observeJobForPhoto(photoId: Long): Flow<AnalysisJobEntity?>
+
     @Update
     suspend fun updateJob(job: AnalysisJobEntity)
 
@@ -22,6 +25,9 @@ interface MealDao {
 
     @Query("SELECT * FROM meal_summaries ORDER BY createdAt DESC")
     fun observeSummaries(): Flow<List<MealSummaryEntity>>
+
+    @Query("SELECT * FROM meal_summaries WHERE jobId = :jobId LIMIT 1")
+    fun observeSummaryForJob(jobId: Long): Flow<MealSummaryEntity?>
 
     @Query("DELETE FROM meal_summaries WHERE id = :summaryId")
     suspend fun deleteSummary(summaryId: Long)
