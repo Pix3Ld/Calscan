@@ -64,6 +64,7 @@ import com.google.android.material.textfield.TextInputLayout
 import com.example.caloriecounter.data.DatabaseProvider
 import com.example.caloriecounter.data.JobStatus
 import com.example.caloriecounter.data.MealRepository
+import com.example.caloriecounter.data.MealSummaryEntity
 import com.example.caloriecounter.data.PhotoAnalysisDetails
 import com.example.caloriecounter.data.PhotoHistoryEntity
 import com.example.caloriecounter.domain.AnalysisQueue
@@ -75,6 +76,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import java.io.ByteArrayInputStream
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -89,12 +91,7 @@ class MainActivity : AppCompatActivity() {
     private val appSettings by lazy {
         getSharedPreferences(APP_SETTINGS_PREFERENCES, Context.MODE_PRIVATE)
     }
-    private val todayConsumed = 1545
-    private val yesterdayConsumed = 1880
-    private val weekCalories = listOf(1800, 2100, 1650, 1950, 1480, 1730, 1545)
-    private val proteinValue = 78
-    private val carbsValue = 190
-    private val fatValue = 60
+    private var currentSummaries: List<MealSummaryEntity> = emptyList()
 
     private var isDarkTheme = false
 
@@ -130,6 +127,7 @@ class MainActivity : AppCompatActivity() {
     private var photoHistory: List<PhotoHistoryEntity> = emptyList()
     private var cameraEnabled = true
     private var pendingPhotoNote: String? = null
+    private var currentPhotoDetails: PhotoHistoryEntity? = null
     private var photoDetailsJob: kotlinx.coroutines.Job? = null
     private var currentPage = Page.HOME
     private var detailsReturnPage = Page.HISTORY
@@ -205,11 +203,20 @@ class MainActivity : AppCompatActivity() {
             isDarkTheme = !isDarkTheme
             updateTheme()
             buildChart()
+            showPage(currentPage)
         }
 
         updateDashboard()
         updateTheme()
         buildChart()
+
+        lifecycleScope.launch {
+            mealRepository.observeSummaries().collect { summaries ->
+                currentSummaries = summaries
+                updateDashboard()
+                buildChart()
+            }
+        }
 
         lifecycleScope.launch {
             mealRepository.observePhotoHistory().collect { photos ->
@@ -318,7 +325,11 @@ class MainActivity : AppCompatActivity() {
                 titleText.text = getString(R.string.settings_daily_limit)
                 buildDailyLimitPage()
             }
-            Page.HOME, Page.DETAILS -> Unit
+            Page.DETAILS -> {
+                titleText.text = getString(R.string.title_details)
+                currentPhotoDetails?.let { buildPhotoDetails(it) }
+            }
+            Page.HOME -> Unit
         }
         return true
     }
@@ -330,6 +341,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showPhotoDetails(photo: PhotoHistoryEntity, returnPage: Page) {
+        currentPhotoDetails = photo
         closeCamera()
         scanDetailsInputLayout = null
         scanDetailsEditText = null
@@ -731,11 +743,13 @@ class MainActivity : AppCompatActivity() {
             setImageResource(android.R.drawable.ic_media_previous)
             contentDescription = getString(R.string.settings_back)
             background = ColorDrawable(Color.TRANSPARENT)
+            setColorFilter(if (isDarkTheme) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430"))
             setOnClickListener { showPage(detailsReturnPage) }
         }, LinearLayout.LayoutParams(48.dp(), 48.dp()))
     }
 
     private fun buildReminderSettingsPage() {
+        addSettingsBackButton()
         val scrollView = android.widget.ScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -817,6 +831,7 @@ class MainActivity : AppCompatActivity() {
             })
         }
         pageContainer.addView(valueRow)
+        updateTheme()
     }
 
     private fun scheduleDailyLimitSave(rawValue: String?) {
@@ -1349,16 +1364,63 @@ class MainActivity : AppCompatActivity() {
         private const val DAILY_LIMIT_SAVE_DELAY_MS = 500L
     }
 
+    private fun getWeekDayRanges(): List<Pair<String, LongRange>> {
+        val dayNames = listOf("P", "W", "Ś", "C", "P", "S", "N")
+        val cal = Calendar.getInstance().apply {
+            firstDayOfWeek = Calendar.MONDAY
+        }
+        while (cal.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY) {
+            cal.add(Calendar.DAY_OF_MONTH, -1)
+        }
+        cal.set(Calendar.HOUR_OF_DAY, 0)
+        cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+
+        val list = mutableListOf<Pair<String, LongRange>>()
+        for (i in 0 until 7) {
+            val start = cal.timeInMillis
+            cal.add(Calendar.DAY_OF_MONTH, 1)
+            val end = cal.timeInMillis - 1
+            list.add(Pair(dayNames[i], start..end))
+        }
+        return list
+    }
+
     private fun updateDashboard() {
+        val todayCal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val todayStart = todayCal.timeInMillis
+        val todayEnd = todayStart + 24 * 3600 * 1000L - 1L
+
+        val yesterdayStart = todayStart - 24 * 3600 * 1000L
+        val yesterdayEnd = todayStart - 1L
+
+        val todaySummaries = currentSummaries.filter { it.createdAt in todayStart..todayEnd }
+        val todayConsumed = todaySummaries.sumOf { it.caloriesKcal }
+        val todayProtein = Math.round(todaySummaries.sumOf { it.proteinGrams.toDouble() }).toInt()
+        val todayCarbs = Math.round(todaySummaries.sumOf { it.carbohydratesGrams.toDouble() }).toInt()
+        val todayFat = Math.round(todaySummaries.sumOf { it.fatGrams.toDouble() }).toInt()
+
+        val yesterdaySummaries = currentSummaries.filter { it.createdAt in yesterdayStart..yesterdayEnd }
+        val yesterdayConsumed = yesterdaySummaries.sumOf { it.caloriesKcal }
+
+        val weekRanges = getWeekDayRanges()
+        val weekTotal = currentSummaries.filter { summary -> weekRanges.any { summary.createdAt in it.second } }.sumOf { it.caloriesKcal }
+
         val remaining = dailyLimit - todayConsumed
 
         todayValue.text = getString(R.string.today_value_template, todayConsumed)
         yesterdayValue.text = getString(R.string.yesterday_value_template, yesterdayConsumed)
-        weekValue.text = getString(R.string.week_value_template, weekCalories.sum())
+        weekValue.text = getString(R.string.week_value_template, weekTotal)
         remainingValue.text = getString(R.string.remaining_value_template, remaining)
-        proteinLabel.text = getString(R.string.macro_protein_template, proteinValue)
-        carbsLabel.text = getString(R.string.macro_carbs_template, carbsValue)
-        fatLabel.text = getString(R.string.macro_fat_template, fatValue)
+        proteinLabel.text = getString(R.string.macro_protein_template, todayProtein)
+        carbsLabel.text = getString(R.string.macro_carbs_template, todayCarbs)
+        fatLabel.text = getString(R.string.macro_fat_template, todayFat)
     }
 
     private fun updateTheme() {
@@ -1429,18 +1491,26 @@ class MainActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.scanHint).setTextColor(if (isDarkTheme) Color.parseColor("#B5E0FF") else Color.parseColor("#1C5DD9"))
         findViewById<View>(R.id.scanHint).setBackgroundColor(if (isDarkTheme) Color.parseColor("#1B3A5B") else Color.parseColor("#E6F0FF"))
 
-        scanDetailsInputLayout?.apply {
+        reminderHomeNotice?.apply {
+            setTextColor(if (isDarkTheme) Color.parseColor("#B5E0FF") else Color.parseColor("#1C5DD9"))
+            background = GradientDrawable().apply {
+                cornerRadius = 8.dp().toFloat()
+                setColor(if (isDarkTheme) Color.parseColor("#1B3A5B") else Color.parseColor("#E6F0FF"))
+            }
+        }
+
+        listOfNotNull(scanDetailsInputLayout, dailyLimitInputLayout).forEach { inputLayout ->
             val fieldBackground = if (isDarkTheme) Color.parseColor("#1F2937") else Color.WHITE
             val fieldText = if (isDarkTheme) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430")
             val fieldHint = if (isDarkTheme) Color.parseColor("#D1D5DB") else Color.parseColor("#58677A")
             val fieldStroke = if (isDarkTheme) Color.parseColor("#8291A5") else Color.parseColor("#65758B")
 
-            setBoxBackgroundColor(fieldBackground)
-            boxStrokeColor = fieldStroke
-            boxStrokeWidth = 1.dp()
-            boxStrokeWidthFocused = 2.dp()
-            defaultHintTextColor = ColorStateList.valueOf(fieldHint)
-            editText?.apply {
+            inputLayout.setBoxBackgroundColor(fieldBackground)
+            inputLayout.boxStrokeColor = fieldStroke
+            inputLayout.boxStrokeWidth = 1.dp()
+            inputLayout.boxStrokeWidthFocused = 2.dp()
+            inputLayout.defaultHintTextColor = ColorStateList.valueOf(fieldHint)
+            inputLayout.editText?.apply {
                 setTextColor(fieldText)
                 setHintTextColor(fieldHint)
             }
@@ -1448,21 +1518,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildChart() {
-        val maxValue = weekCalories.maxOrNull() ?: 1
+        val weekRanges = getWeekDayRanges()
+        val dayData = weekRanges.map { (dayName, range) ->
+            val daySummaries = currentSummaries.filter { it.createdAt in range }
+            val calories = daySummaries.sumOf { it.caloriesKcal }
+            val protein = daySummaries.sumOf { it.proteinGrams.toDouble() }.toFloat()
+            val carbs = daySummaries.sumOf { it.carbohydratesGrams.toDouble() }.toFloat()
+            val fat = daySummaries.sumOf { it.fatGrams.toDouble() }.toFloat()
+            Triple(dayName, calories, Triple(protein, carbs, fat))
+        }
+
+        val maxCalories = dayData.maxOfOrNull { it.second }?.coerceAtLeast(1) ?: 1
         chartContainer.removeAllViews()
 
-        val days = listOf("P", "W", "Ś", "C", "P", "S", "N")
-        val macroMix = listOf(
-            Triple(78, 190, 60),
-            Triple(74, 210, 58),
-            Triple(80, 170, 62),
-            Triple(76, 200, 65),
-            Triple(70, 180, 54),
-            Triple(75, 190, 58),
-            Triple(78, 190, 60)
-        )
-
-        weekCalories.forEachIndexed { index, value ->
+        dayData.forEach { (dayLabel, value, macros) ->
             val column = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
@@ -1471,11 +1540,16 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            val proteinValue = macroMix[index].first
-            val carbsValue = macroMix[index].second
-            val fatValue = macroMix[index].third
+            val proteinValue = macros.first
+            val carbsValue = macros.second
+            val fatValue = macros.third
             val totalMacro = proteinValue + carbsValue + fatValue
-            val barHeight = ((value.toFloat() / maxValue.toFloat()) * 140f).toInt().coerceAtLeast(24)
+
+            val barHeight = if (value > 0) {
+                ((value.toFloat() / maxCalories.toFloat()) * 140f).toInt().coerceIn(12, 140)
+            } else {
+                4
+            }
 
             val barStack = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -1486,31 +1560,39 @@ class MainActivity : AppCompatActivity() {
                 )
             }
 
-            val proteinHeight = ((proteinValue.toFloat() / totalMacro.toFloat()) * barHeight).toInt().coerceAtLeast(8)
-            val carbsHeight = ((carbsValue.toFloat() / totalMacro.toFloat()) * barHeight).toInt().coerceAtLeast(8)
-            val fatHeight = ((fatValue.toFloat() / totalMacro.toFloat()) * barHeight).toInt().coerceAtLeast(8)
+            if (value > 0 && totalMacro > 0f) {
+                val proteinHeight = ((proteinValue / totalMacro) * barHeight).toInt().coerceAtLeast(2)
+                val carbsHeight = ((carbsValue / totalMacro) * barHeight).toInt().coerceAtLeast(2)
+                val fatHeight = ((fatValue / totalMacro) * barHeight).toInt().coerceAtLeast(2)
 
-            val proteinBar = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, proteinHeight.dp())
-                background = ColorDrawable(Color.parseColor("#E53935"))
+                val proteinBar = View(this).apply {
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, proteinHeight.dp())
+                    background = ColorDrawable(Color.parseColor("#E53935"))
+                }
+
+                val carbsBar = View(this).apply {
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, carbsHeight.dp())
+                    background = ColorDrawable(Color.parseColor("#39A0ED"))
+                }
+
+                val fatBar = View(this).apply {
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, fatHeight.dp())
+                    background = ColorDrawable(Color.parseColor("#FF9800"))
+                }
+
+                barStack.addView(fatBar)
+                barStack.addView(carbsBar)
+                barStack.addView(proteinBar)
+            } else {
+                val emptyBar = View(this).apply {
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, barHeight.dp())
+                    background = ColorDrawable(if (value > 0) Color.parseColor("#39A0ED") else if (isDarkTheme) Color.parseColor("#374151") else Color.parseColor("#E5E7EB"))
+                }
+                barStack.addView(emptyBar)
             }
-
-            val carbsBar = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, carbsHeight.dp())
-                background = ColorDrawable(Color.parseColor("#39A0ED"))
-            }
-
-            val fatBar = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, fatHeight.dp())
-                background = ColorDrawable(Color.parseColor("#FF9800"))
-            }
-
-            barStack.addView(fatBar)
-            barStack.addView(carbsBar)
-            barStack.addView(proteinBar)
 
             val label = TextView(this).apply {
-                text = days[index]
+                text = dayLabel
                 gravity = Gravity.CENTER
                 setTextAppearance(android.R.style.TextAppearance_Material_Caption)
                 setTextColor(if (isDarkTheme) Color.parseColor("#D1D5DB") else Color.parseColor("#697586"))

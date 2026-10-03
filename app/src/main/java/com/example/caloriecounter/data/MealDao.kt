@@ -40,4 +40,10 @@ interface MealDao {
 
     @Query("DELETE FROM photo_history WHERE id = :photoId")
     suspend fun deletePhotoHistory(photoId: Long)
+
+    @Query("DELETE FROM meal_summaries WHERE jobId IN (SELECT id FROM analysis_jobs WHERE photoHistoryId = :photoId)")
+    suspend fun deleteSummariesForPhoto(photoId: Long)
+
+    @Query("DELETE FROM analysis_jobs WHERE photoHistoryId = :photoId")
+    suspend fun deleteJobsForPhoto(photoId: Long)
 }

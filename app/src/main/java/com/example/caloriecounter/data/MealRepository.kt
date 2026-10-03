@@ -35,7 +35,11 @@ class MealRepository(private val dao: MealDao) {
         return photo.copy(id = dao.insertPhotoHistory(photo))
     }
 
-    suspend fun deletePhoto(photoId: Long) = dao.deletePhotoHistory(photoId)
+    suspend fun deletePhoto(photoId: Long) {
+        dao.deleteSummariesForPhoto(photoId)
+        dao.deleteJobsForPhoto(photoId)
+        dao.deletePhotoHistory(photoId)
+    }
 
     suspend fun enqueueText(text: String): Long {
         require(text.isNotBlank()) { "Text input cannot be blank" }
