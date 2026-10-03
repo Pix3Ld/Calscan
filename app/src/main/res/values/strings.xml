@@ -56,7 +56,7 @@
     <string name="settings_notifications">Przypomnienia o posiłkach</string>
     <string name="meal_reminder_channel">Przypomnienia o posiłkach</string>
     <string name="meal_reminder_title">Posiłek %1$d</string>
-    <string name="meal_reminder_message">Czas na zaplanowany posiłek.</string>
+    <string name="meal_reminder_message">Czas coś zjeść.</string>
     <string name="home_reminder_notice">Włącz przypomnienia o porach posiłków</string>
     <string name="reminder_choose_meal_count_title">Przypomnienia o posiłkach</string>
     <string name="reminder_choose_meal_count_message">Czy chcesz określić liczbę posiłków? Domyślnie ustawione są 3.</string>
