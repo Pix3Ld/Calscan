@@ -25,7 +25,6 @@ import android.view.TextureView
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -48,6 +47,7 @@ import android.os.Looper
 import android.content.pm.PackageManager
 import android.util.Size
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.button.MaterialButton
 import androidx.lifecycle.lifecycleScope
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -121,9 +121,10 @@ class MainActivity : AppCompatActivity() {
     private var photoImageReader: ImageReader? = null
     private var scanDetailsInputLayout: TextInputLayout? = null
     private var scanDetailsEditText: TextInputEditText? = null
-    private var cameraPlaceholder: Button? = null
-    private var captureButton: Button? = null
+    private var cameraPlaceholder: MaterialButton? = null
+    private var captureButton: MaterialButton? = null
     private var historyContentContainer: LinearLayout? = null
+    private val expandedHistoryDates = mutableSetOf<Long>()
     private var photoHistory: List<PhotoHistoryEntity> = emptyList()
     private var cameraEnabled = true
     private var pendingPhotoNote: String? = null
@@ -157,9 +158,11 @@ class MainActivity : AppCompatActivity() {
         MealRepository(DatabaseProvider.get(applicationContext).mealDao())
     }
 
+    // --- Start aplikacji, konfiguracja widoków i obsługa cyklu życia ---
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         dailyLimit = appSettings.getInt(KEY_DAILY_LIMIT, DEFAULT_DAILY_LIMIT).coerceAtLeast(1)
+        isDarkTheme = appSettings.getBoolean(KEY_DARK_THEME, false)
         setContentView(R.layout.activity_main)
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootLayout)) { view, insets ->
@@ -199,8 +202,14 @@ class MainActivity : AppCompatActivity() {
         homeContentViews = (2..7).map { rootLayout.getChildAt(it) }
         initializeHomeReminderNotice()
 
+        // Przycisk motywu na ekranie głównym zapisuje wybór i odświeża bieżący widok.
         themeToggle.setOnClickListener {
-            isDarkTheme = !isDarkTheme
+            val newTheme = !isDarkTheme
+            if (!appSettings.edit().putBoolean(KEY_DARK_THEME, newTheme).commit()) {
+                Toast.makeText(this, R.string.theme_save_error, Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+            isDarkTheme = newTheme
             updateTheme()
             buildChart()
             showPage(currentPage)
@@ -280,6 +289,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // --- Nawigacja: tworzenie ekranu głównego, skanowania, historii i ustawień ---
     private enum class Page { HOME, SCAN, HISTORY, SETTINGS, REMINDER_SETTINGS, LIMIT_SETTINGS, DETAILS }
 
     private fun showPage(page: Page): Boolean {
@@ -340,6 +350,7 @@ class MainActivity : AppCompatActivity() {
         detailsBackCallback.isEnabled = true
     }
 
+    // --- Szczegóły zdjęcia z historii oraz prezentacja wyniku analizy ---
     private fun showPhotoDetails(photo: PhotoHistoryEntity, returnPage: Page) {
         currentPhotoDetails = photo
         closeCamera()
@@ -360,9 +371,8 @@ class MainActivity : AppCompatActivity() {
     private fun buildPhotoDetails(photo: PhotoHistoryEntity) {
         photoDetailsJob?.cancel()
 
-        pageContainer.addView(Button(this).apply {
-            text = getString(R.string.details_back)
-            isAllCaps = false
+        // Przycisk powrotu z widoku zdjęcia do historii.
+        pageContainer.addView(styledButton(getString(R.string.details_back)).apply {
             setOnClickListener { showPage(detailsReturnPage) }
         })
 
@@ -463,9 +473,8 @@ class MainActivity : AppCompatActivity() {
                         setTextColor(Color.parseColor("#E53935"))
                         setPadding(0, 12.dp(), 0, 12.dp())
                     })
-                    container.addView(Button(this).apply {
-                        text = getString(R.string.meal_analysis_retry)
-                        isAllCaps = false
+                    // Ponawia analizę zdjęcia po błędzie poprzedniego zadania.
+                    container.addView(styledButton(getString(R.string.meal_analysis_retry), primary = true).apply {
                         setOnClickListener {
                             lifecycleScope.launch {
                                 AnalysisQueue(applicationContext).enqueuePhoto(photo.imageBytes, photo.id, photo.note)
@@ -479,9 +488,8 @@ class MainActivity : AppCompatActivity() {
             container.addView(pageText(getString(R.string.meal_analysis_no_analysis), 15f, false).apply {
                 setPadding(0, 12.dp(), 0, 12.dp())
             })
-            container.addView(Button(this).apply {
-                text = getString(R.string.meal_analysis_start)
-                isAllCaps = false
+            // Rozpoczyna analizę dla zdjęcia, dla którego nie ma jeszcze zadania.
+            container.addView(styledButton(getString(R.string.meal_analysis_start), primary = true).apply {
                 setOnClickListener {
                     lifecycleScope.launch {
                         AnalysisQueue(applicationContext).enqueuePhoto(photo.imageBytes, photo.id, photo.note)
@@ -491,10 +499,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // --- Ekran skanowania: podgląd aparatu, przyciski i notatka do zdjęcia ---
     private fun buildScanPage() {
         val intro = pageText(getString(R.string.scan_page_intro), 16f, true)
         pageContainer.addView(intro)
 
+        // Podgląd aparatu zajmuje dostępne miejsce w proporcjach zbliżonych do 4:3.
         val cameraFrame = object : FrameLayout(this) {
             override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
                 val width = MeasureSpec.getSize(widthMeasureSpec)
@@ -539,9 +549,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
         cameraFrame.addView(cameraTexture)
-        cameraPlaceholder = Button(this).apply {
-            text = getString(R.string.camera_enable_button)
-            isAllCaps = false
+        // Przycisk „Włącz kamerę” jest widoczny, gdy podgląd wymaga ponownego uruchomienia.
+        cameraPlaceholder = styledButton(getString(R.string.camera_enable_button)).apply {
             visibility = View.GONE
             setOnClickListener { enableCameraPreview() }
         }
@@ -552,9 +561,8 @@ class MainActivity : AppCompatActivity() {
         ))
         pageContainer.addView(cameraFrame)
 
-        val scanButton = Button(this).apply {
-            text = getString(R.string.scan_button)
-            isAllCaps = false
+        // Przycisk „Zrób zdjęcie”: główna akcja skanowania, aktywna po uruchomieniu aparatu.
+        val scanButton = styledButton(getString(R.string.scan_button), primary = true).apply {
             textSize = 18f
             minHeight = 64.dp()
             isEnabled = false
@@ -567,6 +575,7 @@ class MainActivity : AppCompatActivity() {
         captureButton = scanButton
         pageContainer.addView(scanButton)
 
+        // Opcjonalna notatka jest zapisywana wraz ze zdjęciem i przekazywana do analizy.
         val detailsInput = TextInputLayout(this).apply {
             hint = getString(R.string.scan_details_hint)
             boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
@@ -603,6 +612,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // --- Historia: lista zdjęć pogrupowana w zwijane sekcje według dnia ---
     private fun buildHistoryPage() {
         pageContainer.addView(pageText(getString(R.string.history_page_intro), 16f, true))
         val scrollView = android.widget.ScrollView(this).apply {
@@ -628,54 +638,131 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        photos.forEach { photo ->
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(10.dp(), 10.dp(), 8.dp(), 10.dp())
-                background = ColorDrawable(if (isDarkTheme) Color.parseColor("#1F2937") else Color.WHITE)
-                layoutParams = LinearLayout.LayoutParams(
+        photos
+            .sortedByDescending { it.createdAt }
+            .groupBy { historyDayStart(it.createdAt) }
+            .forEach { (dayStart, dayPhotos) ->
+                val expanded = dayStart in expandedHistoryDates
+                val section = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                }
+                // Nagłówek dnia rozwija lub zwija wszystkie zdjęcia z tej daty.
+                val header = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(12.dp(), 12.dp(), 12.dp(), 12.dp())
+                    background = ColorDrawable(if (isDarkTheme) Color.parseColor("#1F2937") else Color.WHITE)
+                    isClickable = true
+                    isFocusable = true
+                }
+                val dateText = SimpleDateFormat("EEEE, d MMMM yyyy", Locale.getDefault())
+                    .format(Date(dayStart))
+                header.addView(pageText(
+                    getString(
+                        R.string.history_date_header,
+                        dateText,
+                        resources.getQuantityString(
+                            R.plurals.history_meal_count,
+                            dayPhotos.size,
+                            dayPhotos.size
+                        )
+                    ),
+                    15f,
+                    true
+                ), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                val expandIndicator = pageText(if (expanded) "-" else "+", 20f, true)
+                header.addView(expandIndicator)
+
+                val rows = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    visibility = if (expanded) View.VISIBLE else View.GONE
+                }
+                dayPhotos.forEach { photo ->
+                    // Wiersz otwiera szczegóły; osobny przycisk usuwa zdjęcie z historii.
+                    val row = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        setPadding(10.dp(), 10.dp(), 8.dp(), 10.dp())
+                        background = ColorDrawable(if (isDarkTheme) Color.parseColor("#1F2937") else Color.WHITE)
+                        layoutParams = LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.WRAP_CONTENT
+                        ).apply { setMargins(0, 8.dp(), 0, 0) }
+                    }
+                    val thumbnail = ImageView(this).apply {
+                        layoutParams = LinearLayout.LayoutParams(76.dp(), 76.dp())
+                        scaleType = ImageView.ScaleType.CENTER_CROP
+                        setImageBitmap(decodeOrientedPhoto(photo.imageBytes))
+                        contentDescription = getString(R.string.history_photo_content_description)
+                    }
+                    row.addView(thumbnail)
+
+                    val details = LinearLayout(this).apply {
+                        orientation = LinearLayout.VERTICAL
+                        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                            .apply { setMargins(12.dp(), 0, 4.dp(), 0) }
+                    }
+                    details.addView(pageText(
+                        SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(photo.createdAt)),
+                        12f,
+                        false
+                    ))
+                    details.addView(pageText(photo.note ?: getString(R.string.history_photo_default), 15f, true))
+                    row.addView(details)
+                    row.isClickable = true
+                    row.isFocusable = true
+                    row.setOnClickListener { showPhotoDetails(photo, Page.HISTORY) }
+
+                    val deleteButton = ImageButton(this).apply {
+                        setImageResource(android.R.drawable.ic_menu_delete)
+                        contentDescription = getString(R.string.history_delete)
+                        background = ColorDrawable(Color.TRANSPARENT)
+                        setOnClickListener {
+                            lifecycleScope.launch { mealRepository.deletePhoto(photo.id) }
+                        }
+                    }
+                    row.addView(deleteButton, LinearLayout.LayoutParams(44.dp(), 44.dp()))
+                    rows.addView(row)
+                }
+
+                header.contentDescription = getString(
+                    if (expanded) R.string.history_collapse_date else R.string.history_expand_date,
+                    dateText
+                )
+                header.setOnClickListener {
+                    val nowExpanded = if (dayStart in expandedHistoryDates) {
+                        expandedHistoryDates.remove(dayStart)
+                        false
+                    } else {
+                        expandedHistoryDates.add(dayStart)
+                        true
+                    }
+                    rows.visibility = if (nowExpanded) View.VISIBLE else View.GONE
+                    expandIndicator.text = if (nowExpanded) "-" else "+"
+                    header.contentDescription = getString(
+                        if (nowExpanded) R.string.history_collapse_date else R.string.history_expand_date,
+                        dateText
+                    )
+                }
+                section.addView(header)
+                section.addView(rows)
+                container.addView(section, LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { setMargins(0, 12.dp(), 0, 0) }
+                ).apply { setMargins(0, 12.dp(), 0, 0) })
             }
-            val thumbnail = ImageView(this).apply {
-                layoutParams = LinearLayout.LayoutParams(76.dp(), 76.dp())
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                setImageBitmap(decodeOrientedPhoto(photo.imageBytes))
-                contentDescription = getString(R.string.history_photo_content_description)
-            }
-            row.addView(thumbnail)
-
-            val details = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                    .apply { setMargins(12.dp(), 0, 4.dp(), 0) }
-            }
-            details.addView(pageText(
-                SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(photo.createdAt)),
-                12f,
-                false
-            ))
-            details.addView(pageText(photo.note ?: getString(R.string.history_photo_default), 15f, true))
-            row.addView(details)
-            row.isClickable = true
-            row.isFocusable = true
-            row.setOnClickListener { showPhotoDetails(photo, Page.HISTORY) }
-
-            val deleteButton = ImageButton(this).apply {
-                setImageResource(android.R.drawable.ic_menu_delete)
-                contentDescription = getString(R.string.history_delete)
-                background = ColorDrawable(Color.TRANSPARENT)
-                setOnClickListener {
-                    lifecycleScope.launch { mealRepository.deletePhoto(photo.id) }
-                }
-            }
-            row.addView(deleteButton, LinearLayout.LayoutParams(44.dp(), 44.dp()))
-            container.addView(row)
-        }
     }
 
+    private fun historyDayStart(timestamp: Long): Long = Calendar.getInstance().run {
+        timeInMillis = timestamp
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+        timeInMillis
+    }
+
+    // --- Ekran „Ustawienia”: karty nawigujące do przypomnień i limitu dziennego ---
     private fun buildSettingsPage() {
         pageContainer.addView(pageText(getString(R.string.settings_page_intro), 16f, true))
         val settings = reminderSettingsStore.load()
@@ -698,6 +785,7 @@ class MainActivity : AppCompatActivity() {
         ) { openSettingsDetail(Page.LIMIT_SETTINGS) })
     }
 
+    // Karta pokazuje nazwę i wartość ustawienia oraz otwiera jego ekran szczegółów.
     private fun settingsOptionRow(
         title: String,
         summary: String,
@@ -708,9 +796,17 @@ class MainActivity : AppCompatActivity() {
         gravity = Gravity.CENTER_VERTICAL
         setPadding(16.dp(), 14.dp(), 12.dp(), 14.dp())
         background = GradientDrawable().apply {
-            cornerRadius = 8.dp().toFloat()
+            cornerRadius = 16.dp().toFloat()
             setColor(if (isDarkTheme) Color.parseColor("#1F2937") else Color.WHITE)
+            setStroke(1.dp(), if (isDarkTheme) Color.parseColor("#344238") else Color.parseColor("#D8E8DF"))
+        }.let { card ->
+            android.graphics.drawable.RippleDrawable(
+                ColorStateList.valueOf(if (isDarkTheme) Color.parseColor("#344238") else Color.parseColor("#E6F3ED")),
+                card,
+                null
+            )
         }
+        elevation = 2.dp().toFloat()
         isClickable = true
         isFocusable = true
         contentDescription = "$title. $summary"
@@ -739,13 +835,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun addSettingsBackButton() {
-        pageContainer.addView(ImageButton(this).apply {
-            setImageResource(android.R.drawable.ic_media_previous)
-            contentDescription = getString(R.string.settings_back)
-            background = ColorDrawable(Color.TRANSPARENT)
-            setColorFilter(if (isDarkTheme) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430"))
+        // Wspólny przycisk „Wróć” używany w szczegółowych ekranach ustawień.
+        pageContainer.addView(styledButton(getString(R.string.settings_back)).apply {
+            setIconResource(R.drawable.ic_arrow_back_24)
+            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+            iconPadding = 8.dp()
+            iconTint = ColorStateList.valueOf(
+                if (isDarkTheme) Color.parseColor("#D7F3E3") else Color.parseColor("#1E654C")
+            )
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                48.dp()
+            ).apply { setMargins(0, 0, 0, 8.dp()) }
             setOnClickListener { showPage(detailsReturnPage) }
-        }, LinearLayout.LayoutParams(48.dp(), 48.dp()))
+        })
     }
 
     private fun buildReminderSettingsPage() {
@@ -766,10 +869,22 @@ class MainActivity : AppCompatActivity() {
         content.addView(pageText(getString(R.string.settings_reminders_intro), 15f, false))
 
         val settings = reminderSettingsStore.load()
+        // Przełącznik uruchamia procedurę uzyskiwania wymaganych uprawnień Androida.
         val notifications = Switch(this).apply {
             text = getString(R.string.settings_notifications)
             isChecked = settings.enabled
             setTextColor(if (isDarkTheme) Color.WHITE else Color.parseColor("#1C2430"))
+            val checkedColor = Color.parseColor("#1E654C")
+            val uncheckedColor = if (isDarkTheme) Color.parseColor("#788579") else Color.parseColor("#AAB7AE")
+            val tintStates = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+            thumbTintList = ColorStateList(tintStates, intArrayOf(checkedColor, uncheckedColor))
+            trackTintList = ColorStateList(
+                tintStates,
+                intArrayOf(
+                    if (isDarkTheme) Color.parseColor("#527565") else Color.parseColor("#B8D6C4"),
+                    if (isDarkTheme) Color.parseColor("#44504A") else Color.parseColor("#D8E0DA")
+                )
+            )
         }
         reminderSwitch = notifications
         notifications.setOnCheckedChangeListener { _, checked ->
@@ -797,6 +912,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 24.dp(), 0, 8.dp())
         })
 
+        // Pole liczbowe dziennego celu; wartość jest walidowana przed zapisaniem.
         val inputLayout = TextInputLayout(this).apply {
             boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
             isHintEnabled = false
@@ -834,6 +950,7 @@ class MainActivity : AppCompatActivity() {
         updateTheme()
     }
 
+    // Opóźnia zapis limitu do chwili zakończenia edycji i odrzuca niepoprawne wartości.
     private fun scheduleDailyLimitSave(rawValue: String?) {
         val newLimit = rawValue?.toIntOrNull()
         if (newLimit == null || newLimit <= 0) {
@@ -872,7 +989,9 @@ class MainActivity : AppCompatActivity() {
         dailyLimitSummaryView?.text = getString(R.string.settings_daily_limit_summary, newLimit)
     }
 
+    // --- Ekran przypomnień: przełącznik oraz przyciski wyboru liczby i godzin posiłków ---
     private fun initializeHomeReminderNotice() {
+        // Baner na ekranie głównym prowadzący do ustawień, gdy przypomnienia są wyłączone.
         reminderHomeNotice = TextView(this).apply {
             text = getString(R.string.home_reminder_notice)
             textSize = 14f
@@ -907,6 +1026,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun continueReminderEnableFlow() {
+        // Android może wymagać osobno zgody na powiadomienia i dokładne alarmy.
         if (!pendingReminderEnable) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
@@ -1014,14 +1134,18 @@ class MainActivity : AppCompatActivity() {
         val settings = reminderSettingsStore.load()
         container.removeAllViews()
 
-        container.addView(Button(this).apply {
-            text = getString(R.string.reminder_meal_count_label, settings.mealCount)
+        // Otwiera wybór liczby posiłków przypominanych w ciągu dnia.
+        container.addView(styledButton(
+            getString(R.string.reminder_meal_count_label, settings.mealCount)
+        ).apply {
             setOnClickListener { showMealCountPicker(settings.mealCount) }
-        })
+        }, reminderButtonLayoutParams())
 
+        // Każdy przycisk czasu otwiera selektor godziny dla danego posiłku.
         settings.mealTimesMinutes.forEachIndexed { index, minutes ->
-            container.addView(Button(this).apply {
-                text = getString(R.string.reminder_meal_time_label, index + 1, formatMealTime(minutes))
+            container.addView(styledButton(
+                getString(R.string.reminder_meal_time_label, index + 1, formatMealTime(minutes))
+            ).apply {
                 setOnClickListener {
                     TimePickerDialog(
                         this@MainActivity,
@@ -1035,9 +1159,14 @@ class MainActivity : AppCompatActivity() {
                         true
                     ).show()
                 }
-            })
+            }, reminderButtonLayoutParams())
         }
     }
+
+    private fun reminderButtonLayoutParams() = LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        56.dp()
+    ).apply { setMargins(0, 8.dp(), 0, 0) }
 
     private fun formatMealTime(minutes: Int): String =
         String.format(Locale.ROOT, "%02d:%02d", minutes / 60, minutes % 60)
@@ -1061,11 +1190,46 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(this, R.string.reminder_permissions_required, Toast.LENGTH_LONG).show()
     }
 
+    // --- Wspólny tekst i przyciski Material oraz dekodowanie orientacji zdjęcia ---
     private fun pageText(text: String, size: Float, bold: Boolean): TextView = TextView(this).apply {
         this.text = text
         textSize = size
         setTextColor(if (isDarkTheme) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430"))
         if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
+    }
+
+    private fun styledButton(text: String, primary: Boolean = false): MaterialButton {
+        val brandColor = Color.parseColor("#1E654C")
+        val textColor = when {
+            primary -> Color.WHITE
+            isDarkTheme -> Color.parseColor("#D7F3E3")
+            else -> brandColor
+        }
+        val backgroundColor = when {
+            primary -> brandColor
+            isDarkTheme -> Color.parseColor("#263B35")
+            else -> Color.parseColor("#EAF4EE")
+        }
+
+        return MaterialButton(this).apply {
+            this.text = text
+            isAllCaps = false
+            textSize = 15f
+            cornerRadius = 16.dp()
+            insetTop = 0
+            insetBottom = 0
+            setPadding(20.dp(), 10.dp(), 20.dp(), 10.dp())
+            backgroundTintList = ColorStateList.valueOf(backgroundColor)
+            setTextColor(textColor)
+            strokeWidth = if (primary) 0 else 1.dp()
+            strokeColor = ColorStateList.valueOf(
+                if (isDarkTheme) Color.parseColor("#527565") else Color.parseColor("#B8D6C4")
+            )
+            rippleColor = ColorStateList.valueOf(
+                if (primary) Color.parseColor("#3C8067") else Color.parseColor("#C9E2D2")
+            )
+            elevation = 2.dp().toFloat()
+        }
     }
 
     private fun decodeOrientedPhoto(imageBytes: ByteArray): android.graphics.Bitmap? {
@@ -1090,6 +1254,7 @@ class MainActivity : AppCompatActivity() {
         return rotatedBitmap
     }
 
+    // --- Aparat: otwarcie podglądu, akcja „Zrób zdjęcie”, zapis i obsługa błędów ---
     @SuppressLint("MissingPermission")
     private fun openCamera() {
         if (!cameraEnabled || checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) return
@@ -1216,6 +1381,7 @@ class MainActivity : AppCompatActivity() {
             ?: sizes.maxByOrNull { it.width.toLong() * it.height }
     }
 
+    // Obsługa kliknięcia „Zrób zdjęcie”: wykonuje zdjęcie i czasowo blokuje przycisk.
     private fun capturePhoto() {
         val camera = cameraDevice ?: return
         val session = cameraSession ?: return
@@ -1249,6 +1415,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Zapisuje zdjęcie w historii i zleca jego analizę w tle.
     private fun saveCapturedPhoto(imageBytes: ByteArray, note: String?) {
         lifecycleScope.launch {
             try {
@@ -1361,9 +1528,11 @@ class MainActivity : AppCompatActivity() {
         private const val DEFAULT_DAILY_LIMIT = 2200
         private const val APP_SETTINGS_PREFERENCES = "calorie_counter_settings"
         private const val KEY_DAILY_LIMIT = "daily_limit"
+        private const val KEY_DARK_THEME = "dark_theme"
         private const val DAILY_LIMIT_SAVE_DELAY_MS = 500L
     }
 
+    // --- Granice dni tygodnia używane do obliczania sumy kalorii ---
     private fun getWeekDayRanges(): List<Pair<String, LongRange>> {
         val dayNames = listOf("P", "W", "Ś", "C", "P", "S", "N")
         val cal = Calendar.getInstance().apply {
@@ -1387,6 +1556,7 @@ class MainActivity : AppCompatActivity() {
         return list
     }
 
+    // --- Podsumowanie kalorii i makroskładników ---
     private fun updateDashboard() {
         val todayCal = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
@@ -1423,6 +1593,7 @@ class MainActivity : AppCompatActivity() {
         fatLabel.text = getString(R.string.macro_fat_template, todayFat)
     }
 
+    // --- Kolory elementów ekranu głównego, paska nawigacji i pól formularzy ---
     private fun updateTheme() {
         val backgroundColor = if (isDarkTheme) Color.parseColor("#121826") else Color.parseColor("#F5F7FA")
         val cardColor = if (isDarkTheme) Color.parseColor("#1F2937") else Color.parseColor("#FFFFFF")
@@ -1503,7 +1674,7 @@ class MainActivity : AppCompatActivity() {
             val fieldBackground = if (isDarkTheme) Color.parseColor("#1F2937") else Color.WHITE
             val fieldText = if (isDarkTheme) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430")
             val fieldHint = if (isDarkTheme) Color.parseColor("#D1D5DB") else Color.parseColor("#58677A")
-            val fieldStroke = if (isDarkTheme) Color.parseColor("#8291A5") else Color.parseColor("#65758B")
+            val fieldStroke = if (isDarkTheme) Color.parseColor("#8AB89D") else Color.parseColor("#1E654C")
 
             inputLayout.setBoxBackgroundColor(fieldBackground)
             inputLayout.boxStrokeColor = fieldStroke
@@ -1517,6 +1688,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // --- Wykres tygodniowy ---
     private fun buildChart() {
         val weekRanges = getWeekDayRanges()
         val dayData = weekRanges.map { (dayName, range) ->
@@ -1612,5 +1784,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // --- Konwersja jednostek dp na piksele ---
     private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
 }

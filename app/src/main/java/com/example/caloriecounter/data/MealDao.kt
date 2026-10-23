@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface MealDao {
+    // Wstawianie, odczyt i aktualizacja statusu zadań przetwarzanych przez WorkManager.
     @Insert
     suspend fun insertJob(job: AnalysisJobEntity): Long
 
@@ -20,6 +21,7 @@ interface MealDao {
     @Update
     suspend fun updateJob(job: AnalysisJobEntity)
 
+    // Obserwowanie podsumowań składników odżywczych i usuwanie wybranego wyniku.
     @Insert
     suspend fun insertSummary(summary: MealSummaryEntity)
 
@@ -32,6 +34,7 @@ interface MealDao {
     @Query("DELETE FROM meal_summaries WHERE id = :summaryId")
     suspend fun deleteSummary(summaryId: Long)
 
+    // Operacje na zdjęciach historii; przy usuwaniu zdjęcia czyszczone są też jego wyniki i zadania.
     @Insert
     suspend fun insertPhotoHistory(photo: PhotoHistoryEntity): Long
 

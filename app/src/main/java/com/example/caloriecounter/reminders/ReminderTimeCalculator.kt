@@ -3,6 +3,7 @@ package com.example.caloriecounter.reminders
 import java.util.Calendar
 import java.util.TimeZone
 
+// Czyste obliczenia godzin przypomnień, oddzielone od Androidowego AlarmManagera.
 object ReminderTimeCalculator {
     const val MIN_MEALS = 2
     const val MAX_MEALS = 5
@@ -12,6 +13,7 @@ object ReminderTimeCalculator {
     private const val END_MINUTE = 20 * 60
     private const val MINUTES_PER_DAY = 24 * 60
 
+    // Generuje równomierny plan od 08:00 do 20:00 dla dozwolonej liczby posiłków.
     fun defaultTimes(mealCount: Int): List<Int> {
         require(mealCount in MIN_MEALS..MAX_MEALS)
         val span = END_MINUTE - START_MINUTE
@@ -20,6 +22,7 @@ object ReminderTimeCalculator {
         }
     }
 
+    // Buduje datę następnego alarmu w podanej strefie czasowej; bieżąca/przeszła pora oznacza jutro.
     fun nextOccurrenceMillis(
         timeOfDayMinutes: Int,
         afterMillis: Long,

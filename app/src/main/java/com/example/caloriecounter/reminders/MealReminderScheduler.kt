@@ -9,6 +9,7 @@ import android.os.Build
 import com.example.caloriecounter.MainActivity
 import com.example.caloriecounter.R
 
+// Konfiguruje alarmy systemowe przypomnień, w tym ich odtworzenie po zmianie czasu lub restarcie.
 object MealReminderScheduler {
     private const val ACTION_REMIND = "com.example.caloriecounter.action.MEAL_REMINDER"
     private const val EXTRA_MEAL_INDEX = "meal_index"
@@ -79,6 +80,7 @@ object MealReminderScheduler {
 }
 
 class MealReminderReceiver : android.content.BroadcastReceiver() {
+    // Weryfikuje akcję alarmu, pokazuje powiadomienie i planuje następny dzień.
     override fun onReceive(context: Context, intent: Intent) {
         if (!MealReminderScheduler.isReminderAction(intent.action)) return
 
@@ -92,6 +94,7 @@ class MealReminderReceiver : android.content.BroadcastReceiver() {
 }
 
 class ReminderRestoreReceiver : android.content.BroadcastReceiver() {
+    // Ponownie planuje aktywne przypomnienia po starcie urządzenia lub zmianie zegara/strefy.
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED,
@@ -105,6 +108,7 @@ private object MealReminderNotification {
     private const val CHANNEL_ID = "meal_reminders"
     private const val NOTIFICATION_ID_BASE = 5200
 
+    // Tworzy kanał powiadomień, akcję otwarcia aplikacji i powiadomienie dla danego posiłku.
     fun show(context: Context, mealIndex: Int) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=

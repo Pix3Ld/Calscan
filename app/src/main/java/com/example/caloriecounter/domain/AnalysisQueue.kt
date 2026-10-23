@@ -12,6 +12,7 @@ import com.example.caloriecounter.data.DatabaseProvider
 import com.example.caloriecounter.data.MealRepository
 import java.util.concurrent.TimeUnit
 
+// Zapisuje wejście przez repozytorium, a następnie uruchamia analizę odporną na zamknięcie aplikacji.
 class AnalysisQueue(context: Context) {
     private val appContext = context.applicationContext
     private val repository = MealRepository(DatabaseProvider.get(appContext).mealDao())
@@ -22,6 +23,7 @@ class AnalysisQueue(context: Context) {
     suspend fun enqueuePhoto(imageBytes: ByteArray, photoId: Long? = null, note: String? = null): Long =
         enqueue(repository.enqueuePhoto(imageBytes, photoId, note))
 
+    // Unikalna nazwa zapobiega duplikatom; WorkManager ponawia zadanie z rosnącym opóźnieniem.
     private fun enqueue(jobId: Long): Long {
         val request = OneTimeWorkRequestBuilder<MealAnalysisWorker>()
             .setInputData(Data.Builder().putLong(MealAnalysisWorker.JOB_ID, jobId).build())

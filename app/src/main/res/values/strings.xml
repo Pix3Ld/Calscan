@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Calorie Counter</string>
+    <string name="app_name">Calscan</string>
     <string name="title_dashboard">Home</string>
     <string name="label_today">Dziś</string>
     <string name="label_yesterday">Wczoraj</string>
@@ -37,6 +37,9 @@
     <string name="photo_save_error">Nie udało się zapisać zdjęcia.</string>
     <string name="history_page_intro">Ostatnio dodane posiłki</string>
     <string name="history_empty">Nie ma jeszcze zdjęć w historii.</string>
+    <string name="history_date_header">%1$s · %2$s</string>
+    <string name="history_expand_date">Rozwiń posiłki z dnia %1$s</string>
+    <string name="history_collapse_date">Zwiń posiłki z dnia %1$s</string>
     <string name="history_photo_default">Zdjęcie posiłku</string>
     <string name="history_photo_content_description">Zdjęcie posiłku</string>
     <string name="history_delete">Usuń zdjęcie z historii</string>
@@ -70,10 +73,17 @@
     <string name="settings_reminders_summary_off">Wyłączone</string>
     <string name="settings_daily_limit">Limit dzienny</string>
     <string name="settings_daily_limit_summary">%1$d kcal dziennie</string>
-    <string name="settings_back">Wróć do Ustawień</string>
+    <string name="settings_back">Wróć</string>
     <string name="settings_reminders_intro">Ustaw pory przypomnień o posiłkach.</string>
     <string name="daily_limit_description">Ustaw dzienną ilość kalorii, do której chcesz dążyć.</string>
     <string name="daily_limit_input_label">Twój limit dzienny</string>
     <string name="daily_limit_unit">kcal</string>
     <string name="daily_limit_invalid">Wpisz poprawny limit większy od zera.</string>
+    <string name="theme_save_error">Nie udało się zapisać wybranego motywu.</string>
+    <plurals name="history_meal_count">
+        <item quantity="one">%d posiłek</item>
+        <item quantity="few">%d posiłki</item>
+        <item quantity="many">%d posiłków</item>
+        <item quantity="other">%d posiłku</item>
+    </plurals>
 </resources>

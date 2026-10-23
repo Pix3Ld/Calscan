@@ -2,6 +2,7 @@ package com.example.caloriecounter.reminders
 
 import android.content.Context
 
+// Model konfiguracji przypomnień i magazyn SharedPreferences odpowiedzialny za jej trwały zapis.
  data class MealReminderSettings(
     val enabled: Boolean = false,
     val mealCount: Int = ReminderTimeCalculator.DEFAULT_MEALS,
@@ -15,6 +16,7 @@ class MealReminderSettingsStore(context: Context) {
         Context.MODE_PRIVATE
     )
 
+    // Odczytuje ustawienia; brakujące lub niepoprawne godziny zastępuje planem domyślnym.
     fun load(): MealReminderSettings {
         val mealCount = preferences.getInt(KEY_MEAL_COUNT, ReminderTimeCalculator.DEFAULT_MEALS)
             .coerceIn(ReminderTimeCalculator.MIN_MEALS, ReminderTimeCalculator.MAX_MEALS)
@@ -34,6 +36,7 @@ class MealReminderSettingsStore(context: Context) {
         )
     }
 
+    // Sprawdza liczbę posiłków i godzin przed zapisaniem całej konfiguracji.
     fun save(settings: MealReminderSettings) {
         require(settings.mealCount in ReminderTimeCalculator.MIN_MEALS..ReminderTimeCalculator.MAX_MEALS)
         require(settings.mealTimesMinutes.size == settings.mealCount)

@@ -3,6 +3,7 @@ package com.example.caloriecounter.data
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
+// Rekord kolejki analizy: zawiera wejście, status, ewentualny błąd i znaczniki czasu.
 @Entity(tableName = "analysis_jobs")
 data class AnalysisJobEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -17,6 +18,7 @@ data class AnalysisJobEntity(
     val updatedAt: Long = createdAt
 )
 
+// Wynik analizy powiązany z zadaniem, używany w podsumowaniach i szczegółach posiłku.
 @Entity(tableName = "meal_summaries")
 data class MealSummaryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -32,6 +34,7 @@ data class MealSummaryEntity(
     val createdAt: Long = System.currentTimeMillis()
 )
 
+// Oryginalne zdjęcie i notatka użytkownika wyświetlane w historii posiłków.
 @Entity(tableName = "photo_history")
 data class PhotoHistoryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -40,5 +43,6 @@ data class PhotoHistoryEntity(
     val createdAt: Long = System.currentTimeMillis()
 )
 
+// Typ przesłanego materiału oraz status jego przetwarzania.
 enum class InputType { PHOTO, TEXT }
 enum class JobStatus { QUEUED, PROCESSING, COMPLETED, FAILED }

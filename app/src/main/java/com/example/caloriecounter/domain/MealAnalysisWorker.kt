@@ -8,6 +8,7 @@ import com.example.caloriecounter.data.JobStatus
 import com.example.caloriecounter.data.MealSummaryEntity
 import java.io.File
 
+// Worker WorkManagera: odczytuje zadanie, uruchamia analizę i aktualizuje status oraz wynik w Room.
 class MealAnalysisWorker(
     appContext: Context,
     params: WorkerParameters
@@ -18,6 +19,7 @@ class MealAnalysisWorker(
         cacheDirectory = appContext.cacheDir.absolutePath
     )
 
+    // Zwraca sukces po zapisie wyniku albo porażkę po utrwaleniu komunikatu o błędzie.
     override suspend fun doWork(): Result {
         val jobId = inputData.getLong(JOB_ID, -1L)
         val job = dao.getJob(jobId) ?: return Result.failure()

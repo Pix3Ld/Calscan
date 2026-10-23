@@ -10,6 +10,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
+// Kontrakt analizatora i modele danych przekazywane między kolejką, modelem i zapisem wyniku.
 interface MealAnalyzer {
     suspend fun analyze(input: AnalysisInput): AnalysisResult
 }
@@ -35,6 +36,7 @@ class GemmaMealAnalyzer(
     private val modelPath: String,
     private val cacheDirectory: String
 ) : MealAnalyzer {
+    // Sprawdza dostępność modelu, wysyła zdjęcie z notatką do Gemma i parsuje odpowiedź JSON.
     override suspend fun analyze(input: AnalysisInput): AnalysisResult {
         require(input.type == InputType.PHOTO) { "Gemma meal analysis currently requires a photo" }
         val imageBytes = requireNotNull(input.imageBytes) { "Meal photo is missing" }
@@ -74,6 +76,7 @@ class GemmaMealAnalyzer(
     }
 }
 
+// Obsługuje warianty formatu odpowiedzi modelu i waliduje wartości przed zapisem w bazie.
 internal object MealAnalysisResultParser {
     fun parse(rawResult: String): AnalysisResult {
         val jsonString = extractJson(rawResult)
@@ -91,6 +94,7 @@ internal object MealAnalysisResultParser {
         } ?: error("calories_kcal must be a number")
         val caloriesKcal = Math.round(caloriesNum).toInt().coerceAtLeast(0)
 
+        // Model może użyć różnych nazw pól dla tej samej wartości odżywczej.
         fun nutrient(vararg names: String): Float {
             var raw: Any? = null
             for (name in names) {
@@ -137,6 +141,7 @@ internal object MealAnalysisResultParser {
         )
     }
 
+    // Wydziela obiekt JSON z odpowiedzi, która może zawierać dodatkowy tekst modelu.
     private fun extractJson(rawResult: String): String {
         val firstBrace = rawResult.indexOf('{')
         val lastBrace = rawResult.lastIndexOf('}')

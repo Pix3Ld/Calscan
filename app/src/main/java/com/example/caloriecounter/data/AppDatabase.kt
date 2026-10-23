@@ -7,6 +7,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
+// Mapuje enumy Kotlin na tekst w SQLite i z powrotem, aby Room mógł je zapisać.
 class DatabaseConverters {
     @TypeConverter
     fun inputTypeToString(value: InputType): String = value.name
@@ -30,6 +31,7 @@ class DatabaseConverters {
 abstract class AppDatabase : RoomDatabase() {
     abstract fun mealDao(): MealDao
 
+    // Zachowuje istniejące dane podczas dodawania historii zdjęć i powiązań z analizą.
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(database: SupportSQLiteDatabase) {

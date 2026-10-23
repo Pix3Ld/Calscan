@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Top flash / lens bump -->
+    <path
+        android:fillColor="#FFF8F0"
+        android:pathData="M46,35 c0,-2 1.5,-4 3.5,-4 h9 c2,0 3.5,2 3.5,4 v4 h-16 z" />
+
+    <!-- Main camera body -->
+    <path
+        android:fillColor="#FFF8F0"
+        android:pathData="M34,39 h40 c4.4,0 8,3.6 8,8 v22 c0,4.4 -3.6,8 -8,8 h-40 c-4.4,0 -8,-3.6 -8,-8 v-22 c0,-4.4 3.6,-8 8,-8 z" />
+
+    <!-- Camera lens outer circle -->
+    <path
+        android:fillColor="#1E654C"
+        android:pathData="M54,43 c7.7,0 14,6.3 14,14 c0,7.7 -6.3,14 -14,14 c-7.7,0 -14,-6.3 -14,-14 c0,-7.7 6.3,-14 14,-14 z" />
+
+    <!-- Camera lens inner ring -->
+    <path
+        android:fillColor="#FFF8F0"
+        android:pathData="M54,46 c6.1,0 11,4.9 11,11 c0,6.1 -4.9,11 -11,11 c-6.1,0 -11,-4.9 -11,-11 c0,-6.1 4.9,-11 11,-11 z" />
+
+    <!-- Red accent ring inside lens -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M54,49 c4.4,0 8,3.6 8,8 c0,4.4 -3.6,8 -8,8 c-4.4,0 -8,-3.6 -8,-8 c0,-4.4 3.6,-8 8,-8 z"
+        android:strokeColor="#E05244"
+        android:strokeWidth="2" />
+
+    <!-- Green leaf in center -->
+    <path
+        android:fillColor="#1E654C"
+        android:pathData="M54,51 C58,53 59,57 57,60 C55,62 51,61 51,57 C51,54 53,52 54,51 Z" />
+
+    <!-- Leaf central vein -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M53.5,58.5 L56.5,52.5"
+        android:strokeColor="#FFF8F0"
+        android:strokeWidth="1" />
+
+    <!-- Small camera flash dot -->
+    <path
+        android:fillColor="#1E654C"
+        android:pathData="M68,44.5 c0.8,0 1.5,0.7 1.5,1.5 c0,0.8 -0.7,1.5 -1.5,1.5 c-0.8,0 -1.5,-0.7 -1.5,-1.5 c0,-0.8 0.7,-1.5 1.5,-1.5 z" />
+
+</vector>

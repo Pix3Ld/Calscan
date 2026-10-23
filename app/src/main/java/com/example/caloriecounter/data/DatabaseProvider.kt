@@ -7,6 +7,7 @@ object DatabaseProvider {
     @Volatile
     private var instance: AppDatabase? = null
 
+    // Tworzy bazę przy pierwszym użyciu, a kolejnym wywołaniom zwraca tę samą instancję.
     fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
         instance ?: Room.databaseBuilder(
             context.applicationContext,

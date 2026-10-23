@@ -3,6 +3,7 @@ package com.example.caloriecounter.domain
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
+// Testy formatu wyniku i walidacji danych odżywczych.
 class MealAnalysisResultParserTest {
     @Test
     fun parsesNutritionJson() {

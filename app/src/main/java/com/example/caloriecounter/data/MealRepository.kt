@@ -11,7 +11,9 @@ data class PhotoAnalysisDetails(
     val summary: MealSummaryEntity? = null
 )
 
+// Warstwa pośrednia między UI/zadaniami w tle a Room; grupuje operacje dotyczące posiłków.
 class MealRepository(private val dao: MealDao) {
+    // Strumienie aktualizują ekran, gdy zmieniają się podsumowania, historia lub wynik zdjęcia.
     fun observeSummaries(): Flow<List<MealSummaryEntity>> = dao.observeSummaries()
 
     fun observePhotoHistory(): Flow<List<PhotoHistoryEntity>> = dao.observePhotoHistory()
@@ -26,6 +28,7 @@ class MealRepository(private val dao: MealDao) {
             }
         }
 
+    // Walidacja danych oraz zapisywanie zdjęć i nowych zadań analizy.
     suspend fun savePhoto(imageBytes: ByteArray, note: String?): PhotoHistoryEntity {
         require(imageBytes.isNotEmpty()) { "Image cannot be empty" }
         val photo = PhotoHistoryEntity(
