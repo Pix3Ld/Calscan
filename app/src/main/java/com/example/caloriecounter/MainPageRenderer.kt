@@ -9,6 +9,9 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.example.caloriecounter.camera.ScanPageRenderer
+import com.example.caloriecounter.activity.ActivitySnapshot
+import com.example.caloriecounter.activity.ActivityTrackingRenderer
+import com.example.caloriecounter.data.ActivitySessionEntity
 import com.example.caloriecounter.data.PhotoHistoryEntity
 import com.example.caloriecounter.history.MealHistoryRenderer
 import com.example.caloriecounter.reminders.MealReminderController
@@ -17,7 +20,7 @@ import com.example.caloriecounter.settings.SettingsPageRenderer
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputLayout
 
-enum class Page { HOME, SCAN, HISTORY, SETTINGS, REMINDER_SETTINGS, LIMIT_SETTINGS, DETAILS }
+enum class Page { HOME, SCAN, HISTORY, ACTIVITY, SETTINGS, REMINDER_SETTINGS, LIMIT_SETTINGS, DETAILS }
 
 /**
  * Tworzy zawartość ekranów głównych i deleguje wyspecjalizowane sekcje do rendererów.
@@ -27,6 +30,7 @@ class MainPageRenderer(
     private val pageContainer: LinearLayout,
     private val scanRenderer: ScanPageRenderer,
     private val historyRenderer: MealHistoryRenderer,
+    private val activityTrackingRenderer: ActivityTrackingRenderer,
     private val settingsRenderer: SettingsPageRenderer,
     private val reminderController: MealReminderController,
     private val dailyLimitController: DailyLimitSettingsController,
@@ -43,10 +47,17 @@ class MainPageRenderer(
     private var activeInputLayout: TextInputLayout? = null
 
     // Buduje zawartość żądanej strony; ekrany HOME i DETAILS są obsługiwane przez aktywność.
-    fun render(page: Page, photos: List<PhotoHistoryEntity>, dailyLimit: Int) {
+    fun render(
+        page: Page,
+        photos: List<PhotoHistoryEntity>,
+        dailyLimit: Int,
+        activitySnapshot: ActivitySnapshot,
+        activitySessions: List<ActivitySessionEntity>
+    ) {
         when (page) {
             Page.SCAN -> buildScanPage()
             Page.HISTORY -> buildHistoryPage(photos)
+            Page.ACTIVITY -> activityTrackingRenderer.render(activitySnapshot, activitySessions)
             Page.SETTINGS -> onLimitSummaryCreated(
                 settingsRenderer.render(
                     container = pageContainer,
@@ -59,6 +70,10 @@ class MainPageRenderer(
             Page.LIMIT_SETTINGS -> buildDailyLimitPage(dailyLimit)
             Page.HOME, Page.DETAILS -> Unit
         }
+    }
+
+    fun updateActivity(snapshot: ActivitySnapshot, sessions: List<ActivitySessionEntity>) {
+        activityTrackingRenderer.update(snapshot, sessions)
     }
 
     fun renderPhotoHistory(photos: List<PhotoHistoryEntity>) {

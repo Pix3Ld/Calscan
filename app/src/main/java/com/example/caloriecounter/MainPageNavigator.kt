@@ -45,6 +45,7 @@ class MainPageNavigator(
         title.text = when (page) {
             Page.SCAN -> activity.getString(R.string.title_scan)
             Page.HISTORY -> activity.getString(R.string.title_history)
+            Page.ACTIVITY -> activity.getString(R.string.title_activity)
             Page.SETTINGS -> activity.getString(R.string.title_settings)
             Page.REMINDER_SETTINGS -> activity.getString(R.string.settings_reminders_title)
             Page.LIMIT_SETTINGS -> activity.getString(R.string.settings_daily_limit)

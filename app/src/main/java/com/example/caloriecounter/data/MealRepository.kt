@@ -18,6 +18,8 @@ class MealRepository(private val dao: MealDao) {
 
     fun observePhotoHistory(): Flow<List<PhotoHistoryEntity>> = dao.observePhotoHistory()
 
+    fun observeActivitySessions(): Flow<List<ActivitySessionEntity>> = dao.observeActivitySessions()
+
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observeAnalysisForPhoto(photoId: Long): Flow<PhotoAnalysisDetails> =
         dao.observeJobForPhoto(photoId).flatMapLatest { job ->

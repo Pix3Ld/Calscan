@@ -3,8 +3,10 @@ package com.example.caloriecounter
 import android.Manifest
 import android.content.Intent
 import android.os.Bundle
+import android.os.Build
 import android.net.Uri
 import android.provider.Settings
+import android.location.LocationManager
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -14,8 +16,13 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AlertDialog
 import com.example.caloriecounter.camera.MealCameraController
 import com.example.caloriecounter.camera.ScanPageRenderer
+import com.example.caloriecounter.activity.ActivitySnapshot
+import com.example.caloriecounter.activity.ActivityTrackingRenderer
+import com.example.caloriecounter.activity.ActivityTrackingService
+import com.example.caloriecounter.activity.ActivityTrackingState
 import androidx.lifecycle.lifecycleScope
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
@@ -25,6 +32,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.example.caloriecounter.data.DatabaseProvider
+import com.example.caloriecounter.data.ActivitySessionEntity
 import com.example.caloriecounter.data.MealRepository
 import com.example.caloriecounter.data.MealSummaryEntity
 import com.example.caloriecounter.data.PhotoHistoryEntity
@@ -56,6 +64,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var pageContainer: LinearLayout
     private lateinit var homeContentViews: List<View>
     private var photoHistory: List<PhotoHistoryEntity> = emptyList()
+    private var activitySessions: List<ActivitySessionEntity> = emptyList()
+    private var activitySnapshot = ActivitySnapshot()
+    private var pendingActivityType = ActivityTrackingService.TYPE_WALK
+    private var pendingActivityWeight = 70f
+    private var pendingActivityStart = false
+    private var locationSettingsRequested = false
     private lateinit var detailsBackCallback: OnBackPressedCallback
     private val reminderSettingsStore by lazy { MealReminderSettingsStore(applicationContext) }
     private val notificationPermissionLauncher: ActivityResultLauncher<String> = registerForActivityResult(
@@ -64,6 +78,32 @@ class MainActivity : AppCompatActivity() {
     private val cameraPermissionLauncher: ActivityResultLauncher<String> = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted -> cameraController.onPermissionResult(granted) }
+    private val activityLocationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
+            val hasPreciseLocation = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!hasPreciseLocation) {
+                pendingActivityStart = false
+                Toast.makeText(this, R.string.activity_location_permission, Toast.LENGTH_LONG).show()
+            } else {
+                activityTrackingRenderer.onLocationPermissionGranted()
+                if (pendingActivityStart) {
+                    continueActivityStart()
+                } else {
+                    promptToEnableLocationIfNeeded()
+                }
+            }
+        }
+    private val activityRecognitionPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted && pendingActivityStart) {
+                pendingActivityStart = false
+                startActivityTrackingService(pendingActivityType, pendingActivityWeight)
+            } else if (!granted) {
+                pendingActivityStart = false
+                Toast.makeText(this, R.string.activity_sensor_permission, Toast.LENGTH_LONG).show()
+            }
+        }
     private val exactAlarmSettingsLauncher: ActivityResultLauncher<Intent> = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { reminderController.onExactAlarmSettingsResult() }
@@ -138,6 +178,17 @@ class MainActivity : AppCompatActivity() {
             onDeletePhoto = { photoId -> lifecycleScope.launch { mealRepository.deletePhoto(photoId) } }
         )
     }
+    private val activityTrackingRenderer by lazy {
+        ActivityTrackingRenderer(
+            activity = this,
+            pageContainer = pageContainer,
+            pageText = viewFactory::pageText,
+            styledButton = viewFactory::styledButton,
+            isDarkTheme = { isDarkTheme },
+            onStart = ::requestActivityTracking,
+            onStop = { ActivityTrackingService.stop(this) }
+        )
+    }
     private val photoDetailsRenderer: PhotoDetailsRenderer by lazy {
         PhotoDetailsRenderer(
             activity = this,
@@ -163,6 +214,7 @@ class MainActivity : AppCompatActivity() {
             pageContainer = pageContainer,
             scanRenderer = scanPageRenderer,
             historyRenderer = historyRenderer,
+            activityTrackingRenderer = activityTrackingRenderer,
             settingsRenderer = settingsPageRenderer,
             reminderController = reminderController,
             dailyLimitController = dailyLimitController,
@@ -186,6 +238,7 @@ class MainActivity : AppCompatActivity() {
                 photoWorkflow.cancelDetails()
                 if (pageNavigator.currentPage == Page.LIMIT_SETTINGS) dailyLimitController.savePending()
                 cameraController.detach()
+                if (pageNavigator.currentPage == Page.ACTIVITY) activityTrackingRenderer.onPageHidden()
                 pageRenderer.clearDynamicFields()
             },
             onHomeShown = reminderController::onPageChanged,
@@ -197,7 +250,7 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 } else {
-                    pageRenderer.render(page, photoHistory, dailyLimit)
+                    pageRenderer.render(page, photoHistory, dailyLimit, activitySnapshot, activitySessions)
                 }
             },
             setDetailsBackEnabled = { detailsBackCallback.isEnabled = it }
@@ -267,11 +320,34 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        lifecycleScope.launch {
+            mealRepository.observeActivitySessions().collect { sessions ->
+                activitySessions = sessions
+                if (pageNavigator.currentPage == Page.ACTIVITY) {
+                    pageRenderer.updateActivity(activitySnapshot, activitySessions)
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            ActivityTrackingState.snapshots.collect { snapshot ->
+                activitySnapshot = snapshot
+                if (pageNavigator.currentPage == Page.ACTIVITY) {
+                    pageRenderer.updateActivity(activitySnapshot, activitySessions)
+                }
+            }
+        }
+
         bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.nav_home -> pageNavigator.showPage(Page.HOME)
                 R.id.nav_scan -> pageNavigator.showPage(Page.SCAN)
                 R.id.nav_history -> pageNavigator.showPage(Page.HISTORY)
+                R.id.nav_activity -> {
+                    val shown = pageNavigator.showPage(Page.ACTIVITY)
+                    if (shown) ensureActivityLocationPermission()
+                    shown
+                }
                 R.id.nav_settings -> pageNavigator.showPage(Page.SETTINGS)
                 else -> false
             }
@@ -288,12 +364,115 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         cameraController.detach()
         photoWorkflow.cancelDetails()
+        activityTrackingRenderer.onDestroy()
         super.onDestroy()
     }
 
     override fun onResume() {
         super.onResume()
         reminderController.onResume()
+        if (pageNavigator.currentPage == Page.ACTIVITY) {
+            activityTrackingRenderer.onPageShown()
+            if (hasPreciseLocationPermission()) {
+                activityTrackingRenderer.onLocationPermissionGranted()
+            }
+            if (locationSettingsRequested) {
+                locationSettingsRequested = false
+                if (isGpsEnabled()) {
+                    if (pendingActivityStart) continueActivityStart()
+                } else if (pendingActivityStart) {
+                    pendingActivityStart = false
+                    Toast.makeText(this, R.string.activity_location_error, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    override fun onPause() {
+        if (pageNavigator.currentPage == Page.ACTIVITY) activityTrackingRenderer.onPageHidden()
+        super.onPause()
+    }
+
+    private fun requestActivityTracking(activityType: String, weightKg: Float) {
+        pendingActivityType = activityType
+        pendingActivityWeight = weightKg
+        pendingActivityStart = true
+        if (hasPreciseLocationPermission()) {
+            continueActivityStart()
+        } else {
+            requestActivityLocationPermission()
+        }
+    }
+
+    private fun ensureActivityLocationPermission() {
+        if (hasPreciseLocationPermission()) {
+            activityTrackingRenderer.onLocationPermissionGranted()
+            promptToEnableLocationIfNeeded()
+        } else {
+            requestActivityLocationPermission()
+        }
+    }
+
+    private fun requestActivityLocationPermission() {
+        activityLocationPermissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+        )
+    }
+
+    private fun continueActivityStart() {
+        if (!isGpsEnabled()) {
+            promptToEnableLocationIfNeeded()
+            return
+        }
+        if (requiresActivityRecognitionPermission() &&
+            checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            activityRecognitionPermissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+        } else {
+            pendingActivityStart = false
+            startActivityTrackingService(pendingActivityType, pendingActivityWeight)
+        }
+    }
+
+    private fun promptToEnableLocationIfNeeded() {
+        if (isGpsEnabled() || isFinishing || supportFragmentManager.isStateSaved) return
+        AlertDialog.Builder(this)
+            .setTitle(R.string.activity_location_enable_title)
+            .setMessage(R.string.activity_location_enable_message)
+            .setPositiveButton(R.string.activity_location_enable_button) { _, _ ->
+                locationSettingsRequested = true
+                startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun hasPreciseLocationPermission(): Boolean =
+        checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    private fun isGpsEnabled(): Boolean =
+        (getSystemService(LOCATION_SERVICE) as LocationManager)
+            .isProviderEnabled(LocationManager.GPS_PROVIDER)
+
+    private fun requiresActivityRecognitionPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+        val sensors = getSystemService(android.content.Context.SENSOR_SERVICE) as android.hardware.SensorManager
+        return sensors.getDefaultSensor(android.hardware.Sensor.TYPE_STEP_COUNTER) != null
+    }
+
+    private fun startActivityTrackingService(activityType: String, weightKg: Float) {
+        try {
+            ActivityTrackingService.start(this, activityType, weightKg)
+        } catch (exception: SecurityException) {
+            Toast.makeText(this, R.string.activity_location_permission, Toast.LENGTH_LONG).show()
+        } catch (exception: IllegalStateException) {
+            Toast.makeText(this, R.string.activity_location_error, Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun applyDailyLimit(newLimit: Int) {

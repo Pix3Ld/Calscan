@@ -43,6 +43,18 @@ data class PhotoHistoryEntity(
     val createdAt: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "activity_sessions")
+data class ActivitySessionEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val activityType: String,
+    val durationSeconds: Long,
+    val distanceMeters: Double,
+    val steps: Int,
+    val caloriesKcal: Int,
+    val routeJson: String,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
 // Typ przesłanego materiału oraz status jego przetwarzania.
 enum class InputType { PHOTO, TEXT }
 enum class JobStatus { QUEUED, PROCESSING, COMPLETED, FAILED }

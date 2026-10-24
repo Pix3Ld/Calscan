@@ -49,4 +49,10 @@ interface MealDao {
 
     @Query("DELETE FROM analysis_jobs WHERE photoHistoryId = :photoId")
     suspend fun deleteJobsForPhoto(photoId: Long)
+
+    @Insert
+    suspend fun insertActivitySession(session: ActivitySessionEntity): Long
+
+    @Query("SELECT * FROM activity_sessions ORDER BY createdAt DESC LIMIT 30")
+    fun observeActivitySessions(): Flow<List<ActivitySessionEntity>>
 }

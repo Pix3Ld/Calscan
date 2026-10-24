@@ -10,6 +10,7 @@ Android application for tracking meals using a local Gemma model. The first impl
 3. `MealAnalysisWorker` loads the job, marks it as `PROCESSING`, and sends it to `MealAnalyzer`.
 4. A successful result is stored as `MealSummaryEntity`; failed jobs retain an error and can be retried later.
 5. The UI observes `MealRepository.observeSummaries()` and displays the history until the user deletes an item.
+6. The **Ruch** tab can track a walk or run using the device step counter and GPS, display the route on OpenStreetMap, and save the session locally.
 
 The `GemmaMealAnalyzer` keeps Room and WorkManager independent of the LiteRT-LM model SDK.
 
@@ -32,6 +33,13 @@ Gemma 4 E4B requires several gigabytes of available storage and memory; performa
 - calories as `Int`, macros as `Float` grams,
 - vitamins as structured JSON until a stable nutrient schema is selected,
 - original image bytes attached to the resulting summary.
+- activity type, elapsed time, step count, GPS distance, estimated calories, and route coordinates for completed activity sessions.
+
+## Activity tracking
+
+Open **Ruch**, choose a walk or run, enter body weight, and start tracking. The app requests precise location access and continues tracking through a location foreground service until the session is stopped. A device step-counter sensor is needed to count distance: a GPS segment is accepted only when steps were recorded during that interval, GPS accuracy is at most 35 m, and the calculated speed is at most 8 m/s. This reduces false distance while driving; it is a heuristic, not reliable transport-mode detection.
+
+Calories are an estimate based on activity type, duration, and entered weight (MET 3.5 for walking and 8.3 for running). Completed sessions and their route coordinates are stored on-device. The activity tab requests location access so it can show the user's position on the map; GPS must also be enabled to record a route. Map tiles are loaded online from OpenStreetMap with an app-identifying User-Agent and local tile caching. Attribution is provided on the map, and tiles may be unavailable offline. Tile use follows the [OpenStreetMap Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/); the public tile server may refuse requests from networks it has blocked.
 
 ## Project Structure
 The project is organized into several packages and directories:
