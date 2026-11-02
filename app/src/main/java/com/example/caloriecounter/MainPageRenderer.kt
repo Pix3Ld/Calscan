@@ -20,7 +20,7 @@ import com.example.caloriecounter.settings.SettingsPageRenderer
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputLayout
 
-enum class Page { HOME, SCAN, HISTORY, ACTIVITY, SETTINGS, REMINDER_SETTINGS, LIMIT_SETTINGS, DETAILS }
+enum class Page { HOME, SCAN, HISTORY, ACTIVITY, ACTIVITY_DETAILS, SETTINGS, REMINDER_SETTINGS, LIMIT_SETTINGS, DETAILS }
 
 /**
  * Tworzy zawartość ekranów głównych i deleguje wyspecjalizowane sekcje do rendererów.
@@ -68,7 +68,7 @@ class MainPageRenderer(
             )
             Page.REMINDER_SETTINGS -> buildReminderSettingsPage()
             Page.LIMIT_SETTINGS -> buildDailyLimitPage(dailyLimit)
-            Page.HOME, Page.DETAILS -> Unit
+            Page.HOME, Page.ACTIVITY_DETAILS, Page.DETAILS -> Unit
         }
     }
 

@@ -27,6 +27,7 @@
     <string name="title_scan">Skanuj posiłek</string>
     <string name="title_history">Historia posiłków</string>
     <string name="title_activity">Aktywność</string>
+    <string name="title_activity_details">Szczegóły aktywności</string>
     <string name="title_settings">Ustawienia</string>
     <string name="settings_reminders_title">Przypomnienia o posiłkach</string>
     <string name="title_details">Szczegóły skanu</string>
@@ -90,6 +91,8 @@
     <string name="activity_steps_template">%1$d kroków</string>
     <string name="activity_metrics_template">%1$d kroków · %2$.2f km · %3$s · %4$d kcal</string>
     <string name="activity_history">Ostatnie aktywności</string>
+    <string name="activity_history_open">Zobacz całą trasę</string>
+    <string name="activity_route_empty">Dla tej aktywności nie zapisano punktów trasy GPS.</string>
     <string name="activity_empty">Zapisane aktywności pojawią się tutaj.</string>
     <string name="activity_session_template">%1$s · %2$.2f km · %3$d kcal</string>
     <string name="activity_location_permission">Zezwól na lokalizację, aby rejestrować trasę.</string>

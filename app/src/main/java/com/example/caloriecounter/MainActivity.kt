@@ -186,7 +186,8 @@ class MainActivity : AppCompatActivity() {
             styledButton = viewFactory::styledButton,
             isDarkTheme = { isDarkTheme },
             onStart = ::requestActivityTracking,
-            onStop = { ActivityTrackingService.stop(this) }
+            onStop = { ActivityTrackingService.stop(this) },
+            onSessionClick = pageNavigator::showActivityDetails
         )
     }
     private val photoDetailsRenderer: PhotoDetailsRenderer by lazy {
@@ -223,7 +224,7 @@ class MainActivity : AppCompatActivity() {
             isDarkTheme = { isDarkTheme },
             applyTheme = ::applyCurrentTheme,
             openSettingsDetail = { pageNavigator.openSettingsDetail(it) },
-            onBack = { pageNavigator.navigateBackFromDetails() },
+            onBack = ::navigateBackFromDetails,
             onLimitSummaryCreated = { dailyLimitSummaryView = it },
             requestCameraPermission = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }
         )
@@ -238,7 +239,9 @@ class MainActivity : AppCompatActivity() {
                 photoWorkflow.cancelDetails()
                 if (pageNavigator.currentPage == Page.LIMIT_SETTINGS) dailyLimitController.savePending()
                 cameraController.detach()
-                if (pageNavigator.currentPage == Page.ACTIVITY) activityTrackingRenderer.onPageHidden()
+                if (pageNavigator.currentPage == Page.ACTIVITY ||
+                    pageNavigator.currentPage == Page.ACTIVITY_DETAILS
+                ) activityTrackingRenderer.onPageHidden()
                 pageRenderer.clearDynamicFields()
             },
             onHomeShown = reminderController::onPageChanged,
@@ -246,8 +249,12 @@ class MainActivity : AppCompatActivity() {
                 if (page == Page.DETAILS) {
                     pageNavigator.currentPhoto()?.let { photo ->
                         photoWorkflow.renderDetails(pageContainer, photo) {
-                            pageNavigator.navigateBackFromDetails()
+                            navigateBackFromDetails()
                         }
+                    }
+                } else if (page == Page.ACTIVITY_DETAILS) {
+                    pageNavigator.currentActivitySession()?.let { session ->
+                        activityTrackingRenderer.renderSessionDetails(pageContainer, session)
                     }
                 } else {
                     pageRenderer.render(page, photoHistory, dailyLimit, activitySnapshot, activitySessions)
@@ -355,7 +362,7 @@ class MainActivity : AppCompatActivity() {
 
         detailsBackCallback = object : OnBackPressedCallback(false) {
             override fun handleOnBackPressed() {
-                pageNavigator.navigateBackFromDetails()
+                navigateBackFromDetails()
             }
         }
         onBackPressedDispatcher.addCallback(this, detailsBackCallback)
@@ -371,25 +378,33 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         reminderController.onResume()
-        if (pageNavigator.currentPage == Page.ACTIVITY) {
-            activityTrackingRenderer.onPageShown()
-            if (hasPreciseLocationPermission()) {
-                activityTrackingRenderer.onLocationPermissionGranted()
-            }
-            if (locationSettingsRequested) {
-                locationSettingsRequested = false
-                if (isGpsEnabled()) {
-                    if (pendingActivityStart) continueActivityStart()
-                } else if (pendingActivityStart) {
-                    pendingActivityStart = false
-                    Toast.makeText(this, R.string.activity_location_error, Toast.LENGTH_LONG).show()
+        if (pageNavigator.currentPage == Page.ACTIVITY ||
+            pageNavigator.currentPage == Page.ACTIVITY_DETAILS
+        ) {
+            if (pageNavigator.currentPage == Page.ACTIVITY) {
+                activityTrackingRenderer.onPageShown()
+                if (hasPreciseLocationPermission()) {
+                    activityTrackingRenderer.onLocationPermissionGranted()
                 }
+                if (locationSettingsRequested) {
+                    locationSettingsRequested = false
+                    if (isGpsEnabled()) {
+                        if (pendingActivityStart) continueActivityStart()
+                    } else if (pendingActivityStart) {
+                        pendingActivityStart = false
+                        Toast.makeText(this, R.string.activity_location_error, Toast.LENGTH_LONG).show()
+                    }
+                }
+            } else {
+                activityTrackingRenderer.onDetailsPageShown()
             }
         }
     }
 
     override fun onPause() {
-        if (pageNavigator.currentPage == Page.ACTIVITY) activityTrackingRenderer.onPageHidden()
+        if (pageNavigator.currentPage == Page.ACTIVITY ||
+            pageNavigator.currentPage == Page.ACTIVITY_DETAILS
+        ) activityTrackingRenderer.onPageHidden()
         super.onPause()
     }
 
@@ -472,6 +487,16 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.activity_location_permission, Toast.LENGTH_LONG).show()
         } catch (exception: IllegalStateException) {
             Toast.makeText(this, R.string.activity_location_error, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun navigateBackFromDetails() {
+        pageNavigator.navigateBackFromDetails()
+        if (pageNavigator.currentPage == Page.ACTIVITY) {
+            activityTrackingRenderer.onPageShown()
+            if (hasPreciseLocationPermission()) {
+                activityTrackingRenderer.onLocationPermissionGranted()
+            }
         }
     }
 

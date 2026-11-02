@@ -4,6 +4,7 @@ import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import com.example.caloriecounter.data.ActivitySessionEntity
 import com.example.caloriecounter.data.PhotoHistoryEntity
 
 /**
@@ -24,6 +25,7 @@ class MainPageNavigator(
     var detailsReturnPage: Page = Page.HISTORY
         private set
     private var currentPhoto: PhotoHistoryEntity? = null
+    private var currentActivitySession: ActivitySessionEntity? = null
 
     // Zmienia ekran i wykonuje wspólne porządki przed zbudowaniem nowej zawartości.
     fun showPage(page: Page): Boolean {
@@ -46,6 +48,7 @@ class MainPageNavigator(
             Page.SCAN -> activity.getString(R.string.title_scan)
             Page.HISTORY -> activity.getString(R.string.title_history)
             Page.ACTIVITY -> activity.getString(R.string.title_activity)
+            Page.ACTIVITY_DETAILS -> activity.getString(R.string.title_activity_details)
             Page.SETTINGS -> activity.getString(R.string.title_settings)
             Page.REMINDER_SETTINGS -> activity.getString(R.string.settings_reminders_title)
             Page.LIMIT_SETTINGS -> activity.getString(R.string.settings_daily_limit)
@@ -70,7 +73,16 @@ class MainPageNavigator(
         setDetailsBackEnabled(true)
     }
 
+    fun showActivityDetails(session: ActivitySessionEntity) {
+        currentActivitySession = session
+        detailsReturnPage = Page.ACTIVITY
+        showPage(Page.ACTIVITY_DETAILS)
+        setDetailsBackEnabled(true)
+    }
+
     fun currentPhoto(): PhotoHistoryEntity? = currentPhoto
+
+    fun currentActivitySession(): ActivitySessionEntity? = currentActivitySession
 
     fun navigateBackFromDetails() {
         showPage(detailsReturnPage)

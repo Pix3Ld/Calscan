@@ -21,6 +21,7 @@ import com.google.android.material.textfield.TextInputLayout
 import org.json.JSONArray
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.CopyrightOverlay
@@ -42,7 +43,8 @@ class ActivityTrackingRenderer(
     private val styledButton: (String, Boolean) -> MaterialButton,
     private val isDarkTheme: () -> Boolean,
     private val onStart: (String, Float) -> Unit,
-    private val onStop: () -> Unit
+    private val onStop: () -> Unit,
+    private val onSessionClick: (ActivitySessionEntity) -> Unit
 ) {
     private var mapView: MapView? = null
     private var myLocationOverlay: MyLocationNewOverlay? = null
@@ -60,13 +62,9 @@ class ActivityTrackingRenderer(
 
     /** Odtwarza widoki ekranu i mapę, a następnie pokazuje aktualny stan oraz historię. */
     fun render(snapshot: ActivitySnapshot, sessions: List<ActivitySessionEntity>) {
-        mapView?.onPause()
-        mapView?.onDetach()
+        releaseMap()
         pageContainer.removeAllViews()
-        routeOverlays.clear()
         trackingMapCentered = false
-        mapView = null
-        myLocationOverlay = null
 
         val scrollView = ScrollView(activity)
         val content = LinearLayout(activity).apply {
@@ -99,6 +97,74 @@ class ActivityTrackingRenderer(
         currentSessions = null
 
         update(snapshot, sessions)
+    }
+
+    /** Pokazuje zapisany spacer lub bieg na mapie dopasowanej do całego śladu GPS. */
+    fun renderSessionDetails(container: LinearLayout, session: ActivitySessionEntity) {
+        releaseMap()
+        container.removeAllViews()
+        trackingMapCentered = false
+
+        val scrollView = ScrollView(activity)
+        val content = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        scrollView.addView(content)
+        container.addView(
+            scrollView,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        )
+        content.addView(styledButton(activity.getString(R.string.details_back), false).apply {
+            setIconResource(R.drawable.ic_arrow_back_24)
+            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+            iconPadding = 8.dp()
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                48.dp()
+            ).apply { bottomMargin = 12.dp() }
+            setOnClickListener { activity.onBackPressedDispatcher.onBackPressed() }
+        })
+
+        val type = if (session.activityType == ActivityTrackingService.TYPE_RUN) {
+            activity.getString(R.string.activity_type_run_short)
+        } else {
+            activity.getString(R.string.activity_type_walk_short)
+        }
+        val date = SimpleDateFormat("EEE d MMM, HH:mm", Locale.getDefault())
+            .format(Date(session.createdAt))
+        content.addView(pageText(
+            activity.getString(R.string.activity_history_date, type, date),
+            20f,
+            true
+        ))
+        content.addView(pageText(
+            activity.getString(
+                R.string.activity_session_template,
+                formatDuration(session.durationSeconds),
+                session.distanceMeters / 1_000.0,
+                session.caloriesKcal
+            ),
+            16f,
+            false
+        ).apply { setPadding(0, 8.dp(), 0, 4.dp()) })
+        content.addView(pageText(
+            activity.getString(R.string.activity_steps_template, session.steps),
+            15f,
+            false
+        ).apply { setPadding(0, 0, 0, 12.dp()) })
+
+        val route = decodeRoute(session.routeJson)
+        if (route.isEmpty()) {
+            content.addView(pageText(activity.getString(R.string.activity_route_empty), 14f, false))
+        } else {
+            content.addView(buildMap(heightDp = 380))
+            drawRoute(route, centerOnFirstPoint = false)
+            fitMapToRoute(route)
+        }
     }
 
     /** Odświeża metryki, przyciski i trasę bez przebudowy całej strony. */
@@ -148,6 +214,11 @@ class ActivityTrackingRenderer(
         enableMyLocation()
     }
 
+    /** Wznawia mapę zapisanego śladu bez uruchamiania nakładki bieżącej lokalizacji. */
+    fun onDetailsPageShown() {
+        mapView?.onResume()
+    }
+
     /** Włącza nakładkę pozycji, gdy system przyznał dostęp do lokalizacji. */
     fun onLocationPermissionGranted() {
         enableMyLocation()
@@ -155,11 +226,7 @@ class ActivityTrackingRenderer(
 
     /** Zwalnia zasoby mapy i lokalizacji wraz z zakończeniem aktywności. */
     fun onDestroy() {
-        myLocationOverlay?.disableMyLocation()
-        mapView?.onPause()
-        mapView?.onDetach()
-        mapView = null
-        myLocationOverlay = null
+        releaseMap()
     }
 
     // Pozwala wybrać marsz lub bieg; wybór blokuje się podczas aktywnego pomiaru.
@@ -215,7 +282,7 @@ class ActivityTrackingRenderer(
     }
 
     // Konfiguruje mapę OpenStreetMap, która wyświetla bieżącą pozycję i przebytą trasę.
-    private fun buildMap(): MapView {
+    private fun buildMap(heightDp: Int = 260): MapView {
         val configuration = Configuration.getInstance()
         configuration.userAgentValue =
             "${activity.getString(R.string.app_name)}/${BuildConfig.VERSION_NAME} " +
@@ -230,7 +297,7 @@ class ActivityTrackingRenderer(
             overlays.add(CopyrightOverlay(activity))
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                260.dp()
+                heightDp.dp()
             ).apply { topMargin = 8.dp() }
             mapView = this
             onResume()
@@ -321,7 +388,7 @@ class ActivityTrackingRenderer(
         return controls
     }
 
-    // Renderuje historię sesji; dotknięcie karty pokazuje jej ślad na mapie.
+    // Renderuje historię sesji; dotknięcie karty otwiera szczegóły trasy.
     private fun renderSessions(sessions: List<ActivitySessionEntity>) {
         val container = historyContainer ?: return
         container.removeAllViews()
@@ -344,9 +411,10 @@ class ActivityTrackingRenderer(
                 isClickable = true
                 isFocusable = true
                 setOnClickListener {
-                    drawRoute(decodeRoute(session.routeJson), centerOnFirstPoint = true)
+                    onSessionClick(session)
                 }
             }
+            card.contentDescription = activity.getString(R.string.activity_history_open)
             card.addView(pageText(
                 activity.getString(
                     R.string.activity_history_date,
@@ -371,6 +439,10 @@ class ActivityTrackingRenderer(
                 13f,
                 false
             ))
+            card.addView(pageText(activity.getString(R.string.activity_history_open), 13f, true).apply {
+                setTextColor(Color.rgb(30, 101, 76))
+                setPadding(0, 6.dp(), 0, 0)
+            })
             container.addView(card, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -401,6 +473,31 @@ class ActivityTrackingRenderer(
             trackingMapCentered = true
         }
         map.invalidate()
+    }
+
+    private fun fitMapToRoute(segments: List<List<TrackCoordinate>>) {
+        val map = mapView ?: return
+        val points = segments.flatten().map { GeoPoint(it.latitude, it.longitude) }
+        if (points.isEmpty()) return
+        map.post {
+            if (mapView !== map) return@post
+            if (points.size == 1) {
+                map.controller.setCenter(points.first())
+                map.controller.setZoom(16.0)
+            } else {
+                map.zoomToBoundingBox(BoundingBox.fromGeoPoints(points), true, 40.dp())
+            }
+            trackingMapCentered = true
+        }
+    }
+
+    private fun releaseMap() {
+        myLocationOverlay?.disableMyLocation()
+        mapView?.onPause()
+        mapView?.onDetach()
+        mapView = null
+        myLocationOverlay = null
+        routeOverlays.clear()
     }
 
     // Odtwarza z bazy listę odcinków współrzędnych zapisaną jako tablice JSON.
