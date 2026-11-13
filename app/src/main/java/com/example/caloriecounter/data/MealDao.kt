@@ -55,4 +55,7 @@ interface MealDao {
 
     @Query("SELECT * FROM activity_sessions ORDER BY createdAt DESC LIMIT 30")
     fun observeActivitySessions(): Flow<List<ActivitySessionEntity>>
+
+    @Query("DELETE FROM activity_sessions WHERE id = :sessionId")
+    suspend fun deleteActivitySession(sessionId: Long)
 }

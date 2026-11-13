@@ -1,6 +1,7 @@
 package com.example.caloriecounter.activity
 
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -44,7 +45,8 @@ class ActivityTrackingRenderer(
     private val isDarkTheme: () -> Boolean,
     private val onStart: (String, Float) -> Unit,
     private val onStop: () -> Unit,
-    private val onSessionClick: (ActivitySessionEntity) -> Unit
+    private val onSessionClick: (ActivitySessionEntity) -> Unit,
+    private val onDeleteSession: (Long) -> Unit
 ) {
     private var mapView: MapView? = null
     private var myLocationOverlay: MyLocationNewOverlay? = null
@@ -118,16 +120,36 @@ class ActivityTrackingRenderer(
                 1f
             )
         )
-        content.addView(styledButton(activity.getString(R.string.details_back), false).apply {
+        val headerRow = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = 12.dp() }
+        }
+
+        val backBtn = styledButton(activity.getString(R.string.details_back), false).apply {
             setIconResource(R.drawable.ic_arrow_back_24)
             iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
             iconPadding = 8.dp()
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                48.dp()
-            ).apply { bottomMargin = 12.dp() }
             setOnClickListener { activity.onBackPressedDispatcher.onBackPressed() }
-        })
+        }
+
+        val deleteBtn = android.widget.ImageButton(activity).apply {
+            setImageResource(android.R.drawable.ic_menu_delete)
+            contentDescription = activity.getString(R.string.activity_delete)
+            background = android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)
+            setColorFilter(if (isDarkTheme()) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430"))
+            setOnClickListener {
+                onDeleteSession(session.id)
+                activity.onBackPressedDispatcher.onBackPressed()
+            }
+        }
+
+        headerRow.addView(backBtn, LinearLayout.LayoutParams(0, 48.dp(), 1f))
+        headerRow.addView(deleteBtn, LinearLayout.LayoutParams(44.dp(), 44.dp()))
+        content.addView(headerRow)
 
         val type = if (session.activityType == ActivityTrackingService.TYPE_RUN) {
             activity.getString(R.string.activity_type_run_short)
@@ -236,17 +258,25 @@ class ActivityTrackingRenderer(
             isEnabled = !lastSnapshot.isTracking
             setPadding(0, 12.dp(), 0, 4.dp())
         }
+        val textColor = if (isDarkTheme()) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430")
+        val tintList = ColorStateList.valueOf(
+            if (isDarkTheme()) Color.parseColor("#6EE7B7") else Color.parseColor("#1E654C")
+        )
         radioGroup.addView(RadioButton(activity).apply {
             id = View.generateViewId()
             text = activity.getString(R.string.activity_type_walk)
             isChecked = lastSnapshot.activityType == ActivityTrackingService.TYPE_WALK
             isEnabled = !lastSnapshot.isTracking
+            setTextColor(textColor)
+            buttonTintList = tintList
         })
         radioGroup.addView(RadioButton(activity).apply {
             id = View.generateViewId()
             text = activity.getString(R.string.activity_type_run)
             isChecked = lastSnapshot.activityType == ActivityTrackingService.TYPE_RUN
             isEnabled = !lastSnapshot.isTracking
+            setTextColor(textColor)
+            buttonTintList = tintList
         })
         activityTypeGroup = radioGroup
         return radioGroup
@@ -254,15 +284,26 @@ class ActivityTrackingRenderer(
 
     // Masa ciała jest używana przez serwis do oszacowania spalonych kalorii.
     private fun buildWeightInput(): View {
+        val fieldBackground = if (isDarkTheme()) Color.parseColor("#1F2937") else Color.WHITE
+        val fieldText = if (isDarkTheme()) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430")
+        val fieldHint = if (isDarkTheme()) Color.parseColor("#D1D5DB") else Color.parseColor("#58677A")
+        val fieldStroke = if (isDarkTheme()) Color.parseColor("#8291A5") else Color.parseColor("#65758B")
+
         val layout = TextInputLayout(activity).apply {
             hint = activity.getString(R.string.activity_weight_label)
             boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+            setBoxBackgroundColor(fieldBackground)
+            boxStrokeColor = fieldStroke
+            boxStrokeWidth = 1.dp()
+            boxStrokeWidthFocused = 2.dp()
+            defaultHintTextColor = ColorStateList.valueOf(fieldHint)
         }
         weightInput = EditText(activity).apply {
             inputType = android.text.InputType.TYPE_CLASS_NUMBER or
                 android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
             setText("70")
-            setTextColor(if (isDarkTheme()) Color.WHITE else Color.BLACK)
+            setTextColor(fieldText)
+            setHintTextColor(fieldHint)
         }
         layout.addView(weightInput)
         return layout.apply {
@@ -348,7 +389,7 @@ class ActivityTrackingRenderer(
     // Buduje miejsce na komunikaty o błędach uprawnień, GPS lub czujników.
     private fun buildStatus(): TextView {
         statusView = pageText("", 14f, false).apply {
-            setTextColor(if (isDarkTheme()) Color.rgb(255, 205, 120) else Color.rgb(159, 91, 0))
+            setTextColor(if (isDarkTheme()) Color.parseColor("#FCD34D") else Color.parseColor("#B45309"))
             setPadding(0, 8.dp(), 0, 4.dp())
         }
         return statusView!!
@@ -404,18 +445,22 @@ class ActivityTrackingRenderer(
             }
             val date = SimpleDateFormat("EEE d MMM, HH:mm", Locale.getDefault())
                 .format(Date(session.createdAt))
-            val card = LinearLayout(activity).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(12.dp(), 10.dp(), 12.dp(), 10.dp())
+            val cardRow = LinearLayout(activity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding(12.dp(), 10.dp(), 8.dp(), 10.dp())
                 setBackgroundColor(if (isDarkTheme()) Color.rgb(31, 41, 55) else Color.WHITE)
+            }
+
+            val cardDetails = LinearLayout(activity).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
                 isClickable = true
                 isFocusable = true
-                setOnClickListener {
-                    onSessionClick(session)
-                }
+                setOnClickListener { onSessionClick(session) }
             }
-            card.contentDescription = activity.getString(R.string.activity_history_open)
-            card.addView(pageText(
+            cardDetails.contentDescription = activity.getString(R.string.activity_history_open)
+            cardDetails.addView(pageText(
                 activity.getString(
                     R.string.activity_history_date,
                     type,
@@ -424,7 +469,7 @@ class ActivityTrackingRenderer(
                 15f,
                 true
             ))
-            card.addView(pageText(
+            cardDetails.addView(pageText(
                 activity.getString(
                     R.string.activity_session_template,
                     formatDuration(session.durationSeconds),
@@ -434,16 +479,27 @@ class ActivityTrackingRenderer(
                 14f,
                 false
             ))
-            card.addView(pageText(
+            cardDetails.addView(pageText(
                 activity.getString(R.string.activity_steps_template, session.steps),
                 13f,
                 false
             ))
-            card.addView(pageText(activity.getString(R.string.activity_history_open), 13f, true).apply {
-                setTextColor(Color.rgb(30, 101, 76))
+            cardDetails.addView(pageText(activity.getString(R.string.activity_history_open), 13f, true).apply {
+                setTextColor(if (isDarkTheme()) Color.parseColor("#6EE7B7") else Color.parseColor("#1E654C"))
                 setPadding(0, 6.dp(), 0, 0)
             })
-            container.addView(card, LinearLayout.LayoutParams(
+
+            val deleteBtn = android.widget.ImageButton(activity).apply {
+                setImageResource(android.R.drawable.ic_menu_delete)
+                contentDescription = activity.getString(R.string.activity_delete)
+                background = android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)
+                setColorFilter(if (isDarkTheme()) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430"))
+                setOnClickListener { onDeleteSession(session.id) }
+            }
+
+            cardRow.addView(cardDetails)
+            cardRow.addView(deleteBtn, LinearLayout.LayoutParams(44.dp(), 44.dp()))
+            container.addView(cardRow, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = 8.dp() })

@@ -11,11 +11,11 @@ import android.widget.LinearLayout
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.example.caloriecounter.R
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 /**
  * Zarządza stanem przypomnień, wymaganymi uprawnieniami i ekranem ustawień posiłków.
@@ -156,7 +156,8 @@ class MealReminderController(
     }
 
     private fun showMealCountOptIn() {
-        AlertDialog.Builder(activity)
+        val dialogTheme = if (isDarkTheme()) R.style.AppTheme_Dialog_Dark else R.style.AppTheme_Dialog_Light
+        MaterialAlertDialogBuilder(activity, dialogTheme)
             .setTitle(R.string.reminder_choose_meal_count_title)
             .setMessage(R.string.reminder_choose_meal_count_message)
             .setPositiveButton(R.string.reminder_choose_meal_count) { _, _ -> showMealCountPicker(null) }
@@ -174,15 +175,31 @@ class MealReminderController(
     }
 
     private fun showMealCountPicker(currentCount: Int?) {
+        val isDark = isDarkTheme()
+        val dialogTheme = if (isDark) R.style.AppTheme_Dialog_Dark else R.style.AppTheme_Dialog_Light
+
+        val container = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24.dp(), 16.dp(), 24.dp(), 8.dp())
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+        }
+
         val picker = android.widget.NumberPicker(activity).apply {
             minValue = ReminderTimeCalculator.MIN_MEALS
             maxValue = ReminderTimeCalculator.MAX_MEALS
             value = currentCount ?: ReminderTimeCalculator.DEFAULT_MEALS
             wrapSelectorWheel = false
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
         }
-        AlertDialog.Builder(activity)
+        styleNumberPicker(picker, isDark)
+        container.addView(picker)
+
+        MaterialAlertDialogBuilder(activity, dialogTheme)
             .setTitle(R.string.reminder_meal_count_title)
-            .setView(picker)
+            .setView(container)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val oldSettings = settingsStore.load()
                 val newSettings = oldSettings.copy(
@@ -199,6 +216,13 @@ class MealReminderController(
                 if (currentCount == null) setSwitchChecked(false)
             }
             .show()
+    }
+
+    private fun styleNumberPicker(picker: android.widget.NumberPicker, isDark: Boolean) {
+        val textColor = if (isDark) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            picker.textColor = textColor
+        }
     }
 
     private fun enableReminders(settings: MealReminderSettings) {

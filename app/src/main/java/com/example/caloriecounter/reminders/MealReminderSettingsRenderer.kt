@@ -1,6 +1,5 @@
 package com.example.caloriecounter.reminders
 
-import android.app.TimePickerDialog
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.view.View
@@ -12,6 +11,8 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.example.caloriecounter.R
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.timepicker.MaterialTimePicker
+import com.google.android.material.timepicker.TimeFormat
 
 data class ReminderSettingsViews(
     val toggle: Switch,
@@ -98,17 +99,26 @@ class MealReminderSettingsRenderer(
                 false
             ).apply {
                 setOnClickListener {
-                    TimePickerDialog(
-                        activity,
-                        { _, hour, minute ->
-                            val updatedTimes = settings.mealTimesMinutes.toMutableList()
-                            updatedTimes[index] = hour * 60 + minute
-                            onMealTimesChanged(settings.copy(mealTimesMinutes = updatedTimes))
-                        },
-                        minutes / 60,
-                        minutes % 60,
-                        true
-                    ).show()
+                    val timePickerTheme = if (isDarkTheme()) {
+                        R.style.AppTheme_TimePicker_Dark
+                    } else {
+                        R.style.AppTheme_TimePicker_Light
+                    }
+                    val picker = MaterialTimePicker.Builder()
+                        .setTimeFormat(TimeFormat.CLOCK_24H)
+                        .setHour(minutes / 60)
+                        .setMinute(minutes % 60)
+                        .setTitleText(activity.getString(R.string.reminder_meal_time_title))
+                        .setTheme(timePickerTheme)
+                        .build()
+
+                    picker.addOnPositiveButtonClickListener {
+                        val updatedTimes = settings.mealTimesMinutes.toMutableList()
+                        updatedTimes[index] = picker.hour * 60 + picker.minute
+                        onMealTimesChanged(settings.copy(mealTimesMinutes = updatedTimes))
+                    }
+
+                    picker.show(activity.supportFragmentManager, "time_picker_$index")
                 }
             }, reminderButtonLayoutParams())
         }

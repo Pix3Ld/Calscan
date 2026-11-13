@@ -25,12 +25,12 @@ class ActivityViewFactory(
         val brandColor = Color.parseColor("#1E654C")
         val textColor = when {
             primary -> Color.WHITE
-            isDarkTheme() -> Color.parseColor("#D7F3E3")
+            isDarkTheme() -> Color.parseColor("#F3F4F6")
             else -> brandColor
         }
         val backgroundColor = when {
             primary -> brandColor
-            isDarkTheme() -> Color.parseColor("#263B35")
+            isDarkTheme() -> Color.parseColor("#1F2937")
             else -> Color.parseColor("#EAF4EE")
         }
 
@@ -46,7 +46,7 @@ class ActivityViewFactory(
             setTextColor(textColor)
             strokeWidth = if (primary) 0 else 1.dp()
             strokeColor = ColorStateList.valueOf(
-                if (isDarkTheme()) Color.parseColor("#527565") else Color.parseColor("#B8D6C4")
+                if (isDarkTheme()) Color.parseColor("#374151") else Color.parseColor("#B8D6C4")
             )
             rippleColor = ColorStateList.valueOf(
                 if (primary) Color.parseColor("#3C8067") else Color.parseColor("#C9E2D2")

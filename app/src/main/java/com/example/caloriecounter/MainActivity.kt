@@ -187,7 +187,13 @@ class MainActivity : AppCompatActivity() {
             isDarkTheme = { isDarkTheme },
             onStart = ::requestActivityTracking,
             onStop = { ActivityTrackingService.stop(this) },
-            onSessionClick = pageNavigator::showActivityDetails
+            onSessionClick = pageNavigator::showActivityDetails,
+            onDeleteSession = { sessionId ->
+                lifecycleScope.launch {
+                    mealRepository.deleteActivitySession(sessionId)
+                    Toast.makeText(this@MainActivity, R.string.activity_deleted, Toast.LENGTH_SHORT).show()
+                }
+            }
         )
     }
     private val photoDetailsRenderer: PhotoDetailsRenderer by lazy {
@@ -455,7 +461,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun promptToEnableLocationIfNeeded() {
         if (isGpsEnabled() || isFinishing || supportFragmentManager.isStateSaved) return
-        AlertDialog.Builder(this)
+        val dialogTheme = if (isDarkTheme) R.style.AppTheme_Dialog_Dark else R.style.AppTheme_Dialog_Light
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this, dialogTheme)
             .setTitle(R.string.activity_location_enable_title)
             .setMessage(R.string.activity_location_enable_message)
             .setPositiveButton(R.string.activity_location_enable_button) { _, _ ->

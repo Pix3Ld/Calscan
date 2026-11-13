@@ -1,3 +1,95 @@
 <resources>
-    <style name="Theme.CalorieCounter" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
+    <!-- Base App Theme -->
+    <style name="Theme.CalorieCounter" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#1E654C</item>
+        <item name="colorPrimaryVariant">#144635</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">#1E654C</item>
+        <item name="colorSecondaryVariant">#144635</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorAccent">#1E654C</item>
+        <item name="alertDialogTheme">@style/AppTheme.Dialog.Light</item>
+        <item name="materialAlertDialogTheme">@style/AppTheme.Dialog.Light</item>
+    </style>
+
+    <!-- Material Alert Dialog Themes -->
+    <style name="AppTheme.Dialog" parent="AppTheme.Dialog.Light" />
+
+    <style name="AppTheme.Dialog.Light" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
+        <item name="colorSurface">#FFFFFF</item>
+        <item name="dialogCornerRadius">20dp</item>
+        <item name="colorPrimary">#1E654C</item>
+        <item name="colorAccent">#1E654C</item>
+        <item name="colorOnSurface">#1C2430</item>
+        <item name="android:textColorPrimary">#1C2430</item>
+        <item name="android:textColorSecondary">#697586</item>
+        <item name="buttonBarPositiveButtonStyle">@style/AppTheme.Dialog.Button.Light</item>
+        <item name="buttonBarNegativeButtonStyle">@style/AppTheme.Dialog.Button.Light</item>
+        <item name="shapeAppearanceOverlay">@style/AppTheme.Dialog.Corner</item>
+    </style>
+
+    <style name="AppTheme.Dialog.Dark" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
+        <item name="colorSurface">#1F2937</item>
+        <item name="dialogCornerRadius">20dp</item>
+        <item name="colorPrimary">#6EE7B7</item>
+        <item name="colorAccent">#6EE7B7</item>
+        <item name="colorOnSurface">#F3F4F6</item>
+        <item name="android:textColorPrimary">#F3F4F6</item>
+        <item name="android:textColorSecondary">#D1D5DB</item>
+        <item name="buttonBarPositiveButtonStyle">@style/AppTheme.Dialog.Button.Dark</item>
+        <item name="buttonBarNegativeButtonStyle">@style/AppTheme.Dialog.Button.Dark</item>
+        <item name="shapeAppearanceOverlay">@style/AppTheme.Dialog.Corner</item>
+    </style>
+
+    <!-- Time Picker Dialog Themes -->
+    <style name="AppTheme.TimePicker.Light" parent="ThemeOverlay.MaterialComponents.TimePicker">
+        <item name="colorSurface">#FFFFFF</item>
+        <item name="colorPrimary">#1E654C</item>
+        <item name="colorAccent">#1E654C</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#EAF4EE</item>
+        <item name="colorOnPrimaryContainer">#1E654C</item>
+        <item name="colorSurfaceVariant">#F3F4F6</item>
+        <item name="colorOnSurfaceVariant">#1C2430</item>
+        <item name="colorOnSurface">#1C2430</item>
+        <item name="android:textColorPrimary">#1C2430</item>
+        <item name="buttonBarPositiveButtonStyle">@style/AppTheme.Dialog.Button.Light</item>
+        <item name="buttonBarNegativeButtonStyle">@style/AppTheme.Dialog.Button.Light</item>
+        <item name="shapeAppearanceOverlay">@style/AppTheme.Dialog.Corner</item>
+    </style>
+
+    <style name="AppTheme.TimePicker.Dark" parent="ThemeOverlay.MaterialComponents.TimePicker">
+        <item name="colorSurface">#1F2937</item>
+        <item name="colorPrimary">#6EE7B7</item>
+        <item name="colorAccent">#6EE7B7</item>
+        <item name="colorOnPrimary">#121826</item>
+        <item name="colorPrimaryContainer">#263B35</item>
+        <item name="colorOnPrimaryContainer">#6EE7B7</item>
+        <item name="colorSurfaceVariant">#374151</item>
+        <item name="colorOnSurfaceVariant">#F3F4F6</item>
+        <item name="colorOnSurface">#F3F4F6</item>
+        <item name="android:textColorPrimary">#F3F4F6</item>
+        <item name="buttonBarPositiveButtonStyle">@style/AppTheme.Dialog.Button.Dark</item>
+        <item name="buttonBarNegativeButtonStyle">@style/AppTheme.Dialog.Button.Dark</item>
+        <item name="shapeAppearanceOverlay">@style/AppTheme.Dialog.Corner</item>
+    </style>
+
+    <!-- Dialog Button Styles -->
+    <style name="AppTheme.Dialog.Button.Light" parent="Widget.MaterialComponents.Button.TextButton">
+        <item name="android:textColor">#1E654C</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="rippleColor">#201E654C</item>
+    </style>
+
+    <style name="AppTheme.Dialog.Button.Dark" parent="Widget.MaterialComponents.Button.TextButton">
+        <item name="android:textColor">#6EE7B7</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="rippleColor">#206EE7B7</item>
+    </style>
+
+    <style name="AppTheme.Dialog.Corner">
+        <item name="cornerSize">20dp</item>
+    </style>
 </resources>

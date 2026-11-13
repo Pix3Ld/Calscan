@@ -70,6 +70,7 @@
     <string name="reminder_keep_default">Pozostaw 3</string>
     <string name="reminder_meal_count_title">Liczba posiłków</string>
     <string name="reminder_meal_count_label">Liczba posiłków: %1$d</string>
+    <string name="reminder_meal_time_title">Godzina posiłku</string>
     <string name="reminder_meal_time_label">Posiłek %1$d · %2$s</string>
     <string name="reminder_permissions_required">Aby włączyć przypomnienia, zezwól na powiadomienia i dokładne alarmy w ustawieniach Androida.</string>
     <string name="settings_reminders_summary_on">Aktywne · %1$d powiadomień dziennie</string>
@@ -110,6 +111,8 @@
     <string name="activity_type_walk_short">Spacer</string>
     <string name="activity_type_run_short">Bieg</string>
     <string name="activity_history_date">%1$s · %2$s</string>
+    <string name="activity_delete">Usuń trasę</string>
+    <string name="activity_deleted">Usunięto trasę z historii.</string>
     <string name="theme_save_error">Nie udało się zapisać wybranego motywu.</string>
     <plurals name="history_meal_count">
         <item quantity="one">%d posiłek</item>
