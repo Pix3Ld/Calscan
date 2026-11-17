@@ -52,6 +52,7 @@ class MainPageNavigator(
             Page.SETTINGS -> activity.getString(R.string.title_settings)
             Page.REMINDER_SETTINGS -> activity.getString(R.string.settings_reminders_title)
             Page.LIMIT_SETTINGS -> activity.getString(R.string.settings_daily_limit)
+            Page.PROFILE_SETTINGS -> activity.getString(R.string.settings_profile_title)
             Page.DETAILS -> activity.getString(R.string.title_details)
             Page.HOME -> activity.getString(R.string.title_dashboard)
         }

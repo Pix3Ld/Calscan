@@ -7,6 +7,7 @@ import android.graphics.drawable.RippleDrawable
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -26,10 +27,25 @@ class SettingsPageRenderer(
     fun render(
         container: LinearLayout,
         dailyLimit: Int,
+        profile: CalorieProfile,
+        smartCaloriesEnabled: Boolean,
         onRemindersClick: () -> Unit,
-        onDailyLimitClick: () -> Unit
+        onDailyLimitClick: () -> Unit,
+        onProfileClick: () -> Unit
     ): TextView {
-        container.addView(pageText(activity.getString(R.string.settings_page_intro), 16f, true))
+        container.addView(settingsOptionRow(
+            activity.getString(R.string.settings_profile_title),
+            activity.getString(
+                R.string.settings_profile_summary,
+                profile.weightKg,
+                activity.getString(
+                    if (smartCaloriesEnabled) R.string.settings_profile_smart
+                    else R.string.settings_profile_manual
+                )
+            ),
+            onClick = onProfileClick
+        ))
+
         val settings = reminderSettingsStore.load()
         val reminderSummary = if (settings.enabled) {
             activity.getString(R.string.settings_reminders_summary_on, settings.mealCount)
@@ -65,19 +81,7 @@ class SettingsPageRenderer(
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(16.dp(), 14.dp(), 12.dp(), 14.dp())
-        background = GradientDrawable().apply {
-            cornerRadius = 16.dp().toFloat()
-            setColor(if (isDarkTheme()) Color.parseColor("#1F2937") else Color.WHITE)
-            setStroke(1.dp(), if (isDarkTheme()) Color.parseColor("#344238") else Color.parseColor("#D8E8DF"))
-        }.let { card ->
-            RippleDrawable(
-                ColorStateList.valueOf(
-                    if (isDarkTheme()) Color.parseColor("#344238") else Color.parseColor("#E6F3ED")
-                ),
-                card,
-                null
-            )
-        }
+        background = settingsCardBackground()
         elevation = 2.dp().toFloat()
         isClickable = true
         isFocusable = true
@@ -99,13 +103,25 @@ class SettingsPageRenderer(
         summaryView.setPadding(0, 4.dp(), 0, 0)
         textContainer.addView(summaryView)
         addView(textContainer)
-        addView(TextView(activity).apply {
-            text = "›"
-            textSize = 28f
-            gravity = Gravity.CENTER
-            setTextColor(if (isDarkTheme()) Color.parseColor("#D1D5DB") else Color.parseColor("#697586"))
-        }, LinearLayout.LayoutParams(32.dp(), ViewGroup.LayoutParams.MATCH_PARENT))
+        addView(ImageView(activity).apply {
+            setImageResource(R.drawable.ic_expand_more_24)
+            rotation = 270f
+            setColorFilter(if (isDarkTheme()) Color.parseColor("#D1D5DB") else Color.parseColor("#697586"))
+        }, LinearLayout.LayoutParams(24.dp(), 24.dp()))
         setOnClickListener { onClick() }
+    }
+
+    private fun settingsCardBackground() = GradientDrawable().apply {
+        cornerRadius = 12.dp().toFloat()
+        setColor(if (isDarkTheme()) Color.parseColor("#1F2937") else Color.WHITE)
+    }.let { card ->
+        RippleDrawable(
+            ColorStateList.valueOf(
+                if (isDarkTheme()) Color.parseColor("#344238") else Color.parseColor("#E6F3ED")
+            ),
+            card,
+            null
+        )
     }
 
     private fun Int.dp(): Int = (this * activity.resources.displayMetrics.density).toInt()

@@ -31,24 +31,32 @@ class DailyLimitSettingsController(
 
     // Dodaje opis i numeryczne pole edycji do przekazanego ekranu ustawień.
     fun buildPage(container: LinearLayout, limit: Int): TextInputLayout {
-        container.addView(pageText(activity.getString(R.string.daily_limit_description), 15f, false))
-        container.addView(pageText(activity.getString(R.string.daily_limit_input_label), 16f, true).apply {
-            setPadding(0, 24.dp(), 0, 8.dp())
-        })
+        val fieldBackground = if (isDarkTheme()) Color.parseColor("#1F2937") else Color.WHITE
+        val fieldText = if (isDarkTheme()) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430")
+        val fieldHint = if (isDarkTheme()) Color.parseColor("#D1D5DB") else Color.parseColor("#58677A")
+        val fieldStroke = if (isDarkTheme()) Color.parseColor("#8291A5") else Color.parseColor("#1E654C")
 
         val editorLayout = TextInputLayout(activity).apply {
+            hint = activity.getString(R.string.daily_limit_input_label)
             boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
-            isHintEnabled = false
+            setBoxBackgroundColor(fieldBackground)
+            boxStrokeColor = fieldStroke
+            boxStrokeWidth = 1.dp()
+            boxStrokeWidthFocused = 2.dp()
+            defaultHintTextColor = android.content.res.ColorStateList.valueOf(fieldHint)
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
-            )
+            ).apply { topMargin = 12.dp() }
         }
         inputLayout = editorLayout
         val editor = TextInputEditText(activity).apply {
             inputType = InputType.TYPE_CLASS_NUMBER
             maxLines = 1
             setText(limit.toString())
+            setTextColor(fieldText)
+            setHintTextColor(fieldHint)
+            setPadding(12.dp(), 16.dp(), 12.dp(), 16.dp())
             setSelectAllOnFocus(true)
             setOnFocusChangeListener { _, hasFocus -> if (hasFocus) setSelection(text?.length ?: 0) }
             addTextChangedListener(object : TextWatcher {
@@ -72,7 +80,11 @@ class DailyLimitSettingsController(
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             addView(editorLayout, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            addView(pageText(activity.getString(R.string.daily_limit_unit), 16f, true).apply {
+            addView(TextView(activity).apply {
+                text = activity.getString(R.string.daily_limit_unit)
+                textSize = 16f
+                setTextColor(if (isDarkTheme()) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430"))
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
                 setPadding(12.dp(), 0, 0, 0)
             })
         }
@@ -117,14 +129,6 @@ class DailyLimitSettingsController(
         pendingSave = null
         pendingLimitValue = null
     }
-
-    private fun pageText(text: String, size: Float, bold: Boolean): TextView =
-        TextView(activity).apply {
-            this.text = text
-            textSize = size
-            setTextColor(if (isDarkTheme()) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430"))
-            if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
-        }
 
     private fun Int.dp(): Int = (this * activity.resources.displayMetrics.density).toInt()
 

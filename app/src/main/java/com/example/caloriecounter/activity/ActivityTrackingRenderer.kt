@@ -1,16 +1,14 @@
 package com.example.caloriecounter.activity
 
 import android.content.Context
-import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.view.View
 import android.view.ViewGroup
-import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.RadioButton
-import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -18,14 +16,12 @@ import com.example.caloriecounter.BuildConfig
 import com.example.caloriecounter.R
 import com.example.caloriecounter.data.ActivitySessionEntity
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.textfield.TextInputLayout
 import org.json.JSONArray
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.CopyrightOverlay
 import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
@@ -43,6 +39,7 @@ class ActivityTrackingRenderer(
     private val pageText: (String, Float, Boolean) -> TextView,
     private val styledButton: (String, Boolean) -> MaterialButton,
     private val isDarkTheme: () -> Boolean,
+    private val bodyWeightKg: () -> Float,
     private val onStart: (String, Float) -> Unit,
     private val onStop: () -> Unit,
     private val onSessionClick: (ActivitySessionEntity) -> Unit,
@@ -54,8 +51,10 @@ class ActivityTrackingRenderer(
     private var statusView: TextView? = null
     private var startButton: MaterialButton? = null
     private var stopButton: MaterialButton? = null
-    private var weightInput: EditText? = null
-    private var activityTypeGroup: RadioGroup? = null
+    private var activityTypeTabs: List<View> = emptyList()
+    private var activityTypeLabels: List<TextView> = emptyList()
+    private var activityTypeIndicators: List<View> = emptyList()
+    private var selectedActivityType = ActivityTrackingService.TYPE_WALK
     private var historyContainer: LinearLayout? = null
     private var lastSnapshot = ActivitySnapshot()
     private var currentSessions: List<ActivitySessionEntity>? = null
@@ -82,9 +81,7 @@ class ActivityTrackingRenderer(
             )
         )
 
-        content.addView(pageText(activity.getString(R.string.activity_intro), 15f, false))
         content.addView(buildTypeSelector())
-        content.addView(buildWeightInput())
         content.addView(buildMetrics())
         content.addView(buildMap())
         content.addView(buildStatus())
@@ -137,10 +134,10 @@ class ActivityTrackingRenderer(
         }
 
         val deleteBtn = android.widget.ImageButton(activity).apply {
-            setImageResource(android.R.drawable.ic_menu_delete)
+            setImageResource(R.drawable.ic_delete_24)
             contentDescription = activity.getString(R.string.activity_delete)
             background = android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)
-            setColorFilter(if (isDarkTheme()) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430"))
+            setColorFilter(if (isDarkTheme()) Color.parseColor("#D1D5DB") else Color.parseColor("#697586"))
             setOnClickListener {
                 onDeleteSession(session.id)
                 activity.onBackPressedDispatcher.onBackPressed()
@@ -201,8 +198,7 @@ class ActivityTrackingRenderer(
         )
         startButton?.visibility = if (snapshot.isTracking) View.GONE else View.VISIBLE
         stopButton?.visibility = if (snapshot.isTracking) View.VISIBLE else View.GONE
-        activityTypeGroup?.childrenEnabled(!snapshot.isTracking)
-        weightInput?.isEnabled = !snapshot.isTracking
+        updateActivityTypeTabs()
         startButton?.isEnabled = !snapshot.isTracking
 
         val status = snapshot.errorMessage ?: when {
@@ -252,96 +248,155 @@ class ActivityTrackingRenderer(
     }
 
     // Pozwala wybrać marsz lub bieg; wybór blokuje się podczas aktywnego pomiaru.
-    private fun buildTypeSelector(): RadioGroup {
-        val radioGroup = RadioGroup(activity).apply {
-            orientation = RadioGroup.HORIZONTAL
-            isEnabled = !lastSnapshot.isTracking
-            setPadding(0, 12.dp(), 0, 4.dp())
-        }
-        val textColor = if (isDarkTheme()) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430")
-        val tintList = ColorStateList.valueOf(
-            if (isDarkTheme()) Color.parseColor("#6EE7B7") else Color.parseColor("#1E654C")
-        )
-        radioGroup.addView(RadioButton(activity).apply {
-            id = View.generateViewId()
-            text = activity.getString(R.string.activity_type_walk)
-            isChecked = lastSnapshot.activityType == ActivityTrackingService.TYPE_WALK
-            isEnabled = !lastSnapshot.isTracking
-            setTextColor(textColor)
-            buttonTintList = tintList
-        })
-        radioGroup.addView(RadioButton(activity).apply {
-            id = View.generateViewId()
-            text = activity.getString(R.string.activity_type_run)
-            isChecked = lastSnapshot.activityType == ActivityTrackingService.TYPE_RUN
-            isEnabled = !lastSnapshot.isTracking
-            setTextColor(textColor)
-            buttonTintList = tintList
-        })
-        activityTypeGroup = radioGroup
-        return radioGroup
-    }
-
-    // Masa ciała jest używana przez serwis do oszacowania spalonych kalorii.
-    private fun buildWeightInput(): View {
-        val fieldBackground = if (isDarkTheme()) Color.parseColor("#1F2937") else Color.WHITE
-        val fieldText = if (isDarkTheme()) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430")
-        val fieldHint = if (isDarkTheme()) Color.parseColor("#D1D5DB") else Color.parseColor("#58677A")
-        val fieldStroke = if (isDarkTheme()) Color.parseColor("#8291A5") else Color.parseColor("#65758B")
-
-        val layout = TextInputLayout(activity).apply {
-            hint = activity.getString(R.string.activity_weight_label)
-            boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
-            setBoxBackgroundColor(fieldBackground)
-            boxStrokeColor = fieldStroke
-            boxStrokeWidth = 1.dp()
-            boxStrokeWidthFocused = 2.dp()
-            defaultHintTextColor = ColorStateList.valueOf(fieldHint)
-        }
-        weightInput = EditText(activity).apply {
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER or
-                android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
-            setText("70")
-            setTextColor(fieldText)
-            setHintTextColor(fieldHint)
-        }
-        layout.addView(weightInput)
-        return layout.apply {
+    private fun buildTypeSelector(): View {
+        selectedActivityType = lastSnapshot.activityType
+        val selector = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER
+            setPadding(0, 4.dp(), 0, 8.dp())
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 8.dp() }
+            )
+        }
+        val types = listOf(
+            ActivityTrackingService.TYPE_WALK to R.string.activity_type_walk,
+            ActivityTrackingService.TYPE_RUN to R.string.activity_type_run
+        )
+        val tabViews = mutableListOf<View>()
+        val labels = mutableListOf<TextView>()
+        val indicators = mutableListOf<View>()
+
+        types.forEach { (type, labelRes) ->
+            val label = pageText(activity.getString(labelRes), 16f, false).apply {
+                gravity = android.view.Gravity.CENTER
+            }
+            val indicator = View(activity)
+            val tab = LinearLayout(activity).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = android.view.Gravity.CENTER
+                isClickable = true
+                isFocusable = true
+                addView(label, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ))
+                addView(indicator, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    2.dp()
+                ).apply { topMargin = 8.dp() })
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                setOnClickListener {
+                    if (!lastSnapshot.isTracking) {
+                        selectedActivityType = type
+                        updateActivityTypeTabs()
+                    }
+                }
+            }
+            selector.addView(tab)
+            tabViews.add(tab)
+            labels.add(label)
+            indicators.add(indicator)
+        }
+
+        activityTypeTabs = tabViews
+        activityTypeLabels = labels
+        activityTypeIndicators = indicators
+        updateActivityTypeTabs()
+        return selector
+    }
+
+    private fun updateActivityTypeTabs() {
+        val types = listOf(ActivityTrackingService.TYPE_WALK, ActivityTrackingService.TYPE_RUN)
+        types.forEachIndexed { index, type ->
+            val selected = selectedActivityType == type
+            activityTypeTabs.getOrNull(index)?.apply {
+                isEnabled = !lastSnapshot.isTracking
+                alpha = if (lastSnapshot.isTracking) 0.65f else 1f
+            }
+            activityTypeLabels.getOrNull(index)?.apply {
+                setTextColor(
+                    if (selected) {
+                        if (isDarkTheme()) Color.parseColor("#6EE7B7") else Color.parseColor("#1E654C")
+                    } else {
+                        if (isDarkTheme()) Color.parseColor("#D1D5DB") else Color.parseColor("#697586")
+                    }
+                )
+                setTypeface(typeface, if (selected) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+            }
+            activityTypeIndicators.getOrNull(index)?.setBackgroundColor(
+                if (selected) {
+                    if (isDarkTheme()) Color.parseColor("#6EE7B7") else Color.parseColor("#1E654C")
+                } else {
+                    Color.TRANSPARENT
+                }
+            )
         }
     }
 
     // Jedno pole pokazuje kroki, dystans, czas i szacowane kalorie.
     private fun buildMetrics(): TextView {
-        metricsView = pageText("", 18f, true).apply {
-            setPadding(0, 16.dp(), 0, 12.dp())
+        metricsView = pageText("", 16f, true).apply {
+            setPadding(14.dp(), 12.dp(), 14.dp(), 12.dp())
+            background = GradientDrawable().apply {
+                cornerRadius = 12.dp().toFloat()
+                setColor(if (isDarkTheme()) Color.parseColor("#1F2937") else Color.WHITE)
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 8.dp() }
         }
         return metricsView!!
     }
 
     // Konfiguruje mapę OpenStreetMap, która wyświetla bieżącą pozycję i przebytą trasę.
-    private fun buildMap(heightDp: Int = 260): MapView {
+    private fun buildMap(heightDp: Int = 220): FrameLayout {
         val configuration = Configuration.getInstance()
         configuration.userAgentValue =
             "${activity.getString(R.string.app_name)}/${BuildConfig.VERSION_NAME} " +
                 "(+https://github.com/Pix3Ld/calvic-a-callorie-app)"
         configuration.getOsmdroidTileCache(activity)
-        return MapView(activity).apply {
+        val map = MapView(activity).apply {
             setTileSource(TileSourceFactory.MAPNIK)
             setMultiTouchControls(true)
-            setBuiltInZoomControls(true)
             controller.setZoom(5.0)
             controller.setCenter(GeoPoint(52.2297, 21.0122))
-            overlays.add(CopyrightOverlay(activity))
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            mapView = this
+            onResume()
+        }
+        return FrameLayout(activity).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 heightDp.dp()
             ).apply { topMargin = 8.dp() }
-            mapView = this
-            onResume()
+            addView(map)
+            addView(TextView(activity).apply {
+                text = activity.getString(R.string.map_attribution)
+                textSize = 10f
+                setTextColor(if (isDarkTheme()) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430"))
+                setPadding(6.dp(), 3.dp(), 6.dp(), 3.dp())
+                background = GradientDrawable().apply {
+                    cornerRadius = 4.dp().toFloat()
+                    setColor(
+                        if (isDarkTheme()) Color.argb(220, 31, 41, 55)
+                        else Color.argb(220, 255, 255, 255)
+                    )
+                }
+                isClickable = false
+                isFocusable = false
+            }, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.BOTTOM or android.view.Gravity.START
+            ).apply {
+                marginStart = 6.dp()
+                bottomMargin = 6.dp()
+            })
         }
     }
 
@@ -403,20 +458,13 @@ class ActivityTrackingRenderer(
         }
         startButton = styledButton(activity.getString(R.string.activity_start), true).apply {
             setOnClickListener {
-                val weight = weightInput?.text?.toString()?.replace(',', '.')?.toFloatOrNull()
-                if (weight == null || weight !in 20f..300f) {
-                    statusView?.text = activity.getString(R.string.activity_weight_invalid)
+                val weight = bodyWeightKg()
+                if (weight !in 20f..300f) {
+                    statusView?.text = activity.getString(R.string.profile_weight_invalid)
                     statusView?.visibility = View.VISIBLE
                     return@setOnClickListener
                 }
-                val selected = activityTypeGroup?.checkedRadioButtonId
-                val selectedButton = activityTypeGroup?.findViewById<RadioButton>(selected ?: -1)
-                val type = if (selectedButton?.text == activity.getString(R.string.activity_type_run)) {
-                    ActivityTrackingService.TYPE_RUN
-                } else {
-                    ActivityTrackingService.TYPE_WALK
-                }
-                onStart(type, weight)
+                onStart(selectedActivityType, weight)
             }
         }
         stopButton = styledButton(activity.getString(R.string.activity_stop), false).apply {
@@ -449,7 +497,10 @@ class ActivityTrackingRenderer(
                 orientation = LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 setPadding(12.dp(), 10.dp(), 8.dp(), 10.dp())
-                setBackgroundColor(if (isDarkTheme()) Color.rgb(31, 41, 55) else Color.WHITE)
+                background = GradientDrawable().apply {
+                    cornerRadius = 12.dp().toFloat()
+                    setColor(if (isDarkTheme()) Color.rgb(31, 41, 55) else Color.WHITE)
+                }
             }
 
             val cardDetails = LinearLayout(activity).apply {
@@ -479,21 +530,11 @@ class ActivityTrackingRenderer(
                 14f,
                 false
             ))
-            cardDetails.addView(pageText(
-                activity.getString(R.string.activity_steps_template, session.steps),
-                13f,
-                false
-            ))
-            cardDetails.addView(pageText(activity.getString(R.string.activity_history_open), 13f, true).apply {
-                setTextColor(if (isDarkTheme()) Color.parseColor("#6EE7B7") else Color.parseColor("#1E654C"))
-                setPadding(0, 6.dp(), 0, 0)
-            })
-
             val deleteBtn = android.widget.ImageButton(activity).apply {
-                setImageResource(android.R.drawable.ic_menu_delete)
+                setImageResource(R.drawable.ic_delete_24)
                 contentDescription = activity.getString(R.string.activity_delete)
                 background = android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)
-                setColorFilter(if (isDarkTheme()) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430"))
+                setColorFilter(if (isDarkTheme()) Color.parseColor("#D1D5DB") else Color.parseColor("#697586"))
                 setOnClickListener { onDeleteSession(session.id) }
             }
 
@@ -576,12 +617,6 @@ class ActivityTrackingRenderer(
     private fun hasStepCounter(): Boolean {
         val sensors = activity.getSystemService(Context.SENSOR_SERVICE) as android.hardware.SensorManager
         return sensors.getDefaultSensor(android.hardware.Sensor.TYPE_STEP_COUNTER) != null
-    }
-
-    private fun RadioGroup.childrenEnabled(enabled: Boolean) {
-        for (index in 0 until childCount) {
-            getChildAt(index).isEnabled = enabled
-        }
     }
 
     // Formatuje czas jako MM:SS lub H:MM:SS dla dłuższych sesji.

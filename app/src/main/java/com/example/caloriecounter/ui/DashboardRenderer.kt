@@ -51,8 +51,18 @@ class DashboardRenderer(
             activity.getString(R.string.yesterday_value_template, yesterdayConsumed)
         activity.findViewById<TextView>(R.id.weekValue).text =
             activity.getString(R.string.week_value_template, weekTotal)
-        activity.findViewById<TextView>(R.id.remainingValue).text =
-            activity.getString(R.string.remaining_value_template, dailyLimit - todayConsumed)
+        val remaining = dailyLimit - todayConsumed
+        activity.findViewById<TextView>(R.id.remainingValue).apply {
+            text = activity.getString(R.string.remaining_value_template, remaining)
+            setTextColor(
+                when {
+                    remaining < 0 && isDarkTheme() -> Color.parseColor("#FDA4AF")
+                    remaining < 0 -> Color.parseColor("#B42318")
+                    isDarkTheme() -> Color.parseColor("#6EE7B7")
+                    else -> Color.parseColor("#1E654C")
+                }
+            )
+        }
         activity.findViewById<TextView>(R.id.proteinLabel).text =
             activity.getString(R.string.macro_protein_template, todayProtein)
         activity.findViewById<TextView>(R.id.carbsLabel).text =
@@ -61,7 +71,7 @@ class DashboardRenderer(
             activity.getString(R.string.macro_fat_template, todayFat)
     }
 
-    // Rysuje słupki kalorii z podziałem na udział białka, węglowodanów i tłuszczów.
+    // Rysuje prosty wykres dziennego spożycia kalorii z podziałem na makroskładniki.
     fun buildChart(summaries: List<MealSummaryEntity>) {
         val dayData = getWeekDayRanges().map { (dayName, range) ->
             val daySummaries = summaries.filter { it.createdAt in range }
@@ -76,6 +86,11 @@ class DashboardRenderer(
         val chartContainer = activity.findViewById<LinearLayout>(R.id.chartContainer)
         chartContainer.removeAllViews()
 
+        val proteinColor = if (isDarkTheme()) Color.parseColor("#6EE7B7") else Color.parseColor("#1E654C")
+        val carbsColor = if (isDarkTheme()) Color.parseColor("#F87171") else Color.parseColor("#DC2626")
+        val fatColor = if (isDarkTheme()) Color.parseColor("#FBBF24") else Color.parseColor("#D97706")
+        val emptyColor = if (isDarkTheme()) Color.parseColor("#374151") else Color.parseColor("#E5E7EB")
+
         dayData.forEach { (dayLabel, value, macros) ->
             val column = LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
@@ -85,15 +100,17 @@ class DashboardRenderer(
                 }
             }
 
-            val proteinValue = macros.first
-            val carbsValue = macros.second
-            val fatValue = macros.third
-            val totalMacro = proteinValue + carbsValue + fatValue
+            val proteinGrams = macros.first
+            val carbsGrams = macros.second
+            val fatGrams = macros.third
+            val totalMacroGrams = proteinGrams + carbsGrams + fatGrams
+
             val barHeight = if (value > 0) {
-                ((value.toFloat() / maxCalories.toFloat()) * 140f).toInt().coerceIn(12, 140)
+                ((value.toFloat() / maxCalories.toFloat()) * 92f).toInt().coerceIn(8, 92)
             } else {
-                4
+                3
             }
+
             val barStack = LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.BOTTOM
@@ -103,28 +120,36 @@ class DashboardRenderer(
                 )
             }
 
-            if (value > 0 && totalMacro > 0f) {
-                val proteinHeight = ((proteinValue / totalMacro) * barHeight).toInt().coerceAtLeast(2)
-                val carbsHeight = ((carbsValue / totalMacro) * barHeight).toInt().coerceAtLeast(2)
-                val fatHeight = ((fatValue / totalMacro) * barHeight).toInt().coerceAtLeast(2)
-                barStack.addView(macroBar("#FF9800", fatHeight))
-                barStack.addView(macroBar("#39A0ED", carbsHeight))
-                barStack.addView(macroBar("#E53935", proteinHeight))
-            } else {
-                val emptyColor = if (value > 0) {
-                    Color.parseColor("#39A0ED")
-                } else if (isDarkTheme()) {
-                    Color.parseColor("#374151")
-                } else {
-                    Color.parseColor("#E5E7EB")
+            if (value > 0 && totalMacroGrams > 0f) {
+                val fatHeight = ((fatGrams / totalMacroGrams) * barHeight).toInt().coerceAtLeast(2)
+                val carbsHeight = ((carbsGrams / totalMacroGrams) * barHeight).toInt().coerceAtLeast(2)
+                val proteinHeight = ((proteinGrams / totalMacroGrams) * barHeight).toInt().coerceAtLeast(2)
+
+                val fatBar = View(activity).apply {
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, fatHeight.dp())
+                    background = ColorDrawable(fatColor)
                 }
-                barStack.addView(View(activity).apply {
+                val carbsBar = View(activity).apply {
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, carbsHeight.dp())
+                    background = ColorDrawable(carbsColor)
+                }
+                val proteinBar = View(activity).apply {
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, proteinHeight.dp())
+                    background = ColorDrawable(proteinColor)
+                }
+
+                barStack.addView(fatBar)
+                barStack.addView(carbsBar)
+                barStack.addView(proteinBar)
+            } else {
+                val singleBar = View(activity).apply {
                     layoutParams = LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         barHeight.dp()
                     )
-                    background = ColorDrawable(emptyColor)
-                })
+                    background = ColorDrawable(if (value > 0) proteinColor else emptyColor)
+                }
+                barStack.addView(singleBar)
             }
 
             column.addView(TextView(activity).apply {
@@ -142,14 +167,6 @@ class DashboardRenderer(
             })
             chartContainer.addView(column)
         }
-    }
-
-    private fun macroBar(color: String, height: Int): View = View(activity).apply {
-        layoutParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            height.dp()
-        )
-        background = ColorDrawable(Color.parseColor(color))
     }
 
     private fun getWeekDayRanges(): List<Pair<String, LongRange>> {

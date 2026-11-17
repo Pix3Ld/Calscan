@@ -19,13 +19,11 @@ import com.google.android.material.textfield.TextInputLayout
 class ScanPageRenderer(
     private val activity: AppCompatActivity,
     private val cameraController: MealCameraController,
-    private val pageText: (String, Float, Boolean) -> android.widget.TextView,
+    private val isDarkTheme: () -> Boolean,
     private val styledButton: (String, Boolean) -> MaterialButton
 ) {
     // Tworzy podgląd, akcję zdjęcia i pole notatki; zwraca pole do aktualizacji motywu.
     fun render(container: LinearLayout): TextInputLayout {
-        container.addView(pageText(activity.getString(R.string.scan_page_intro), 16f, true))
-
         val cameraFrame = object : FrameLayout(activity) {
             override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
                 val width = MeasureSpec.getSize(widthMeasureSpec)
@@ -101,7 +99,7 @@ class ScanPageRenderer(
                 android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
             minLines = 1
             maxLines = 2
-            setPadding(0, 8.dp(), 0, 8.dp())
+            setPadding(12.dp(), 24.dp(), 12.dp(), 14.dp())
             setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) cameraController.disableForNote()
             }
@@ -122,7 +120,10 @@ class ScanPageRenderer(
         }
         val detailsInput = TextInputLayout(activity).apply {
             hint = activity.getString(R.string.scan_details_hint)
-            boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+            boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_FILLED
+            setBoxBackgroundColor(
+                if (isDarkTheme()) Color.parseColor("#263244") else Color.parseColor("#F1F5F2")
+            )
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT

@@ -43,6 +43,9 @@ import com.example.caloriecounter.reminders.MealReminderController
 import com.example.caloriecounter.reminders.MealReminderSettingsStore
 import com.example.caloriecounter.settings.DailyLimitSettingsController
 import com.example.caloriecounter.settings.AppSettingsStore
+import com.example.caloriecounter.settings.CalorieProfile
+import com.example.caloriecounter.settings.CalorieProfileSettingsController
+import com.example.caloriecounter.settings.MaintenanceCalorieCalculator
 import com.example.caloriecounter.settings.SettingsPageRenderer
 import com.example.caloriecounter.ui.AppThemeApplier
 import com.example.caloriecounter.ui.ActivityViewFactory
@@ -125,7 +128,7 @@ class MainActivity : AppCompatActivity() {
         ScanPageRenderer(
             activity = this,
             cameraController = cameraController,
-            pageText = viewFactory::pageText,
+            isDarkTheme = { isDarkTheme },
             styledButton = viewFactory::styledButton
         )
     }
@@ -146,6 +149,14 @@ class MainActivity : AppCompatActivity() {
             reminderSettingsStore = reminderSettingsStore,
             isDarkTheme = { isDarkTheme },
             pageText = viewFactory::pageText
+        )
+    }
+    private val calorieProfileSettingsController by lazy {
+        CalorieProfileSettingsController(
+            activity = this,
+            pageText = viewFactory::pageText,
+            styledButton = viewFactory::styledButton,
+            isDarkTheme = { isDarkTheme }
         )
     }
     private val reminderController: MealReminderController by lazy {
@@ -185,6 +196,7 @@ class MainActivity : AppCompatActivity() {
             pageText = viewFactory::pageText,
             styledButton = viewFactory::styledButton,
             isDarkTheme = { isDarkTheme },
+            bodyWeightKg = { appSettings.calorieProfile().weightKg },
             onStart = ::requestActivityTracking,
             onStop = { ActivityTrackingService.stop(this) },
             onSessionClick = pageNavigator::showActivityDetails,
@@ -223,6 +235,7 @@ class MainActivity : AppCompatActivity() {
             historyRenderer = historyRenderer,
             activityTrackingRenderer = activityTrackingRenderer,
             settingsRenderer = settingsPageRenderer,
+            profileSettingsController = calorieProfileSettingsController,
             reminderController = reminderController,
             dailyLimitController = dailyLimitController,
             pageText = viewFactory::pageText,
@@ -232,6 +245,7 @@ class MainActivity : AppCompatActivity() {
             openSettingsDetail = { pageNavigator.openSettingsDetail(it) },
             onBack = ::navigateBackFromDetails,
             onLimitSummaryCreated = { dailyLimitSummaryView = it },
+            onProfileSaved = ::applyCalorieProfile,
             requestCameraPermission = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }
         )
     }
@@ -263,7 +277,15 @@ class MainActivity : AppCompatActivity() {
                         activityTrackingRenderer.renderSessionDetails(pageContainer, session)
                     }
                 } else {
-                    pageRenderer.render(page, photoHistory, dailyLimit, activitySnapshot, activitySessions)
+                    pageRenderer.render(
+                        page,
+                        photoHistory,
+                        dailyLimit,
+                        appSettings.calorieProfile(),
+                        appSettings.isSmartCalorieCalculationEnabled(),
+                        activitySnapshot,
+                        activitySessions
+                    )
                 }
             },
             setDetailsBackEnabled = { detailsBackCallback.isEnabled = it }
@@ -298,8 +320,11 @@ class MainActivity : AppCompatActivity() {
             visibility = View.GONE
         }
         rootLayout.addView(pageContainer, 1)
-        homeContentViews = (2..7).map { rootLayout.getChildAt(it) }
+        homeContentViews = listOf(findViewById(R.id.dashboardScrollView))
         reminderController.attachHomeNotice(rootLayout)
+        reminderController.homeNotice?.let { notice ->
+            homeContentViews = homeContentViews + notice
+        }
 
         // Przycisk motywu na ekranie głównym zapisuje wybór i odświeża bieżący widok.
         findViewById<ImageButton>(R.id.themeToggle).setOnClickListener {
@@ -310,6 +335,7 @@ class MainActivity : AppCompatActivity() {
             }
             isDarkTheme = newTheme
             applyCurrentTheme()
+            dashboardRenderer.updateDashboard(currentSummaries, dailyLimit)
             dashboardRenderer.buildChart(currentSummaries)
             pageNavigator.showPage(pageNavigator.currentPage)
         }
@@ -514,13 +540,22 @@ class MainActivity : AppCompatActivity() {
         dailyLimitSummaryView?.text = getString(R.string.settings_daily_limit_summary, newLimit)
     }
 
+    private fun applyCalorieProfile(profile: CalorieProfile, smartCaloriesEnabled: Boolean) {
+        appSettings.saveCalorieProfile(profile)
+        appSettings.saveSmartCalorieCalculationEnabled(smartCaloriesEnabled)
+        if (smartCaloriesEnabled) {
+            applyDailyLimit(MaintenanceCalorieCalculator.calculate(profile))
+        }
+        pageNavigator.showPage(Page.SETTINGS)
+    }
+
     // --- Wspólny tekst i przyciski Material oraz dekodowanie orientacji zdjęcia ---
     // Przekazuje dynamicznie utworzone pola, aby motyw obejmował również formularz otwartego ekranu.
     private fun applyCurrentTheme() {
         themeApplier.apply(
             isDarkTheme = isDarkTheme,
             reminderHomeNotice = reminderController.homeNotice,
-            inputLayouts = listOf(pageRenderer.currentInputLayout())
+            inputLayouts = pageRenderer.activeInputLayouts()
         )
     }
 

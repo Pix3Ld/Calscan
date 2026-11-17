@@ -30,7 +30,7 @@ class ActivityViewFactory(
         }
         val backgroundColor = when {
             primary -> brandColor
-            isDarkTheme() -> Color.parseColor("#1F2937")
+            isDarkTheme() -> Color.parseColor("#263244")
             else -> Color.parseColor("#EAF4EE")
         }
 
@@ -38,7 +38,7 @@ class ActivityViewFactory(
             this.text = text
             isAllCaps = false
             textSize = 15f
-            cornerRadius = 16.dp()
+            cornerRadius = 28.dp()
             insetTop = 0
             insetBottom = 0
             setPadding(20.dp(), 10.dp(), 20.dp(), 10.dp())
@@ -46,7 +46,7 @@ class ActivityViewFactory(
             setTextColor(textColor)
             strokeWidth = if (primary) 0 else 1.dp()
             strokeColor = ColorStateList.valueOf(
-                if (isDarkTheme()) Color.parseColor("#374151") else Color.parseColor("#B8D6C4")
+                if (isDarkTheme()) Color.parseColor("#52637A") else Color.parseColor("#B8D6C4")
             )
             rippleColor = ColorStateList.valueOf(
                 if (primary) Color.parseColor("#3C8067") else Color.parseColor("#C9E2D2")

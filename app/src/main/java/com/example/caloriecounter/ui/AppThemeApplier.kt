@@ -26,12 +26,11 @@ class AppThemeApplier(private val activity: AppCompatActivity) {
         val cardColor = if (isDarkTheme) Color.parseColor("#1F2937") else Color.WHITE
         val primaryTextColor = if (isDarkTheme) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430")
         val secondaryTextColor = if (isDarkTheme) Color.parseColor("#D1D5DB") else Color.parseColor("#697586")
-        val positiveColor = if (isDarkTheme) Color.parseColor("#6EE7B7") else Color.parseColor("#2E7D32")
         val buttonBackground = if (isDarkTheme) Color.parseColor("#2F3B52") else Color.parseColor("#E5E7EB")
         val buttonIconColor = if (isDarkTheme) Color.parseColor("#F3F4F6") else Color.parseColor("#111827")
-        val chartCardColor = if (isDarkTheme) Color.parseColor("#243044") else Color.WHITE
-        val navBg = if (isDarkTheme) Color.parseColor("#1B2738") else Color.parseColor("#E8EEF5")
-        val navItemColor = if (isDarkTheme) Color.parseColor("#E5E7EB") else Color.parseColor("#2E4057")
+        val navBg = cardColor
+        val navItemColor = if (isDarkTheme) Color.parseColor("#D1D5DB") else Color.parseColor("#697586")
+        val selectedNavItemColor = if (isDarkTheme) Color.parseColor("#6EE7B7") else Color.parseColor("#1E654C")
 
         activity.window.statusBarColor = backgroundColor
         WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply {
@@ -45,51 +44,61 @@ class AppThemeApplier(private val activity: AppCompatActivity) {
         activity.findViewById<ImageButton>(R.id.themeToggle).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = 18f
+                cornerRadius = 12.dp().toFloat()
                 setColor(buttonBackground)
-                setStroke(1, if (isDarkTheme) Color.parseColor("#3A4657") else Color.parseColor("#D1D5DB"))
             }
-            elevation = 2f
+            elevation = 0f
             setColorFilter(buttonIconColor)
             setImageResource(if (isDarkTheme) R.drawable.ic_moon_24 else R.drawable.ic_sun_24)
         }
 
         listOf(R.id.todayCard, R.id.remainingCard, R.id.yesterdayCard, R.id.weekCard, R.id.chartCard)
-            .forEach { id -> activity.findViewById<View>(id).setBackgroundColor(cardColor) }
-        activity.findViewById<View>(R.id.chartCard).setBackgroundColor(chartCardColor)
+            .forEach { id ->
+                activity.findViewById<View>(id).background = GradientDrawable().apply {
+                    cornerRadius = 12.dp().toFloat()
+                    setColor(cardColor)
+                }
+            }
         activity.findViewById<BottomNavigationView>(R.id.bottomNavigation).apply {
             setBackgroundColor(navBg)
-            itemIconTintList = ColorStateList.valueOf(navItemColor)
-            itemTextColor = ColorStateList.valueOf(navItemColor)
+            val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+            val colors = intArrayOf(selectedNavItemColor, navItemColor)
+            itemIconTintList = ColorStateList(states, colors)
+            itemTextColor = ColorStateList(states, colors)
         }
 
         activity.findViewById<TextView>(R.id.todayValue).setTextColor(primaryTextColor)
         activity.findViewById<TextView>(R.id.yesterdayValue).setTextColor(primaryTextColor)
         activity.findViewById<TextView>(R.id.weekValue).setTextColor(primaryTextColor)
-        activity.findViewById<TextView>(R.id.remainingValue).setTextColor(positiveColor)
-
         listOf(R.id.labelToday, R.id.labelRemaining, R.id.labelYesterday, R.id.labelWeek)
             .forEach { id -> activity.findViewById<TextView>(id).setTextColor(secondaryTextColor) }
 
         val macroTextColor = if (isDarkTheme) Color.parseColor("#E5E7EB") else Color.parseColor("#1F2937")
         listOf(R.id.proteinLabel, R.id.carbsLabel, R.id.fatLabel)
             .forEach { id -> activity.findViewById<TextView>(id).setTextColor(macroTextColor) }
-        activity.findViewById<View>(R.id.proteinDot).setBackgroundColor(Color.parseColor("#E53935"))
-        activity.findViewById<View>(R.id.carbsDot).setBackgroundColor(Color.parseColor("#39A0ED"))
-        activity.findViewById<View>(R.id.fatDot).setBackgroundColor(Color.parseColor("#FF9800"))
 
-        activity.findViewById<TextView>(R.id.scanHint).setTextColor(
-            if (isDarkTheme) Color.parseColor("#B5E0FF") else Color.parseColor("#1C5DD9")
-        )
-        activity.findViewById<View>(R.id.scanHint).setBackgroundColor(
-            if (isDarkTheme) Color.parseColor("#1B3A5B") else Color.parseColor("#E6F0FF")
-        )
+        val proteinColor = if (isDarkTheme) Color.parseColor("#6EE7B7") else Color.parseColor("#1E654C")
+        val carbsColor = if (isDarkTheme) Color.parseColor("#F87171") else Color.parseColor("#DC2626")
+        val fatColor = if (isDarkTheme) Color.parseColor("#FBBF24") else Color.parseColor("#D97706")
+
+        activity.findViewById<View>(R.id.proteinIndicator)?.background = GradientDrawable().apply {
+            cornerRadius = 2.dp().toFloat()
+            setColor(proteinColor)
+        }
+        activity.findViewById<View>(R.id.carbsIndicator)?.background = GradientDrawable().apply {
+            cornerRadius = 2.dp().toFloat()
+            setColor(carbsColor)
+        }
+        activity.findViewById<View>(R.id.fatIndicator)?.background = GradientDrawable().apply {
+            cornerRadius = 2.dp().toFloat()
+            setColor(fatColor)
+        }
 
         reminderHomeNotice?.apply {
-            setTextColor(if (isDarkTheme) Color.parseColor("#B5E0FF") else Color.parseColor("#1C5DD9"))
+            setTextColor(if (isDarkTheme) Color.parseColor("#6EE7B7") else Color.parseColor("#1E654C"))
             background = GradientDrawable().apply {
-                cornerRadius = 8.dp().toFloat()
-                setColor(if (isDarkTheme) Color.parseColor("#1B3A5B") else Color.parseColor("#E6F0FF"))
+                cornerRadius = 12.dp().toFloat()
+                setColor(if (isDarkTheme) Color.parseColor("#263B35") else Color.parseColor("#EAF4EE"))
             }
         }
 
@@ -97,7 +106,8 @@ class AppThemeApplier(private val activity: AppCompatActivity) {
             val fieldBackground = if (isDarkTheme) Color.parseColor("#1F2937") else Color.WHITE
             val fieldText = if (isDarkTheme) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430")
             val fieldHint = if (isDarkTheme) Color.parseColor("#D1D5DB") else Color.parseColor("#58677A")
-            val fieldStroke = if (isDarkTheme) Color.parseColor("#8AB89D") else Color.parseColor("#1E654C")
+            val fieldStroke = if (isDarkTheme) Color.parseColor("#52637A") else Color.parseColor("#B8D6C4")
+            inputLayout.boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
             inputLayout.setBoxBackgroundColor(fieldBackground)
             inputLayout.boxStrokeColor = fieldStroke
             inputLayout.boxStrokeWidth = 1.dp()

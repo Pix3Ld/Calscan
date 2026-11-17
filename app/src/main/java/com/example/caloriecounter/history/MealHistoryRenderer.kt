@@ -2,7 +2,7 @@ package com.example.caloriecounter.history
 
 import android.graphics.Bitmap
 import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -74,7 +74,7 @@ class MealHistoryRenderer(
                     if (nowExpanded) R.string.history_collapse_date else R.string.history_expand_date,
                     dateText
                 )
-                expandIndicator.text = if (nowExpanded) "-" else "+"
+                expandIndicator.rotation = if (nowExpanded) 180f else 0f
             }
             section.addView(header)
             section.addView(rows)
@@ -90,13 +90,25 @@ class MealHistoryRenderer(
         dateText: String,
         photoCount: Int,
         expanded: Boolean
-    ): Pair<LinearLayout, TextView> {
-        val indicator = pageText(if (expanded) "-" else "+", 20f, true)
+    ): Pair<LinearLayout, ImageView> {
+        val indicator = ImageView(activity).apply {
+            setImageResource(R.drawable.ic_expand_more_24)
+            setColorFilter(if (isDarkTheme()) Color.parseColor("#D1D5DB") else Color.parseColor("#697586"))
+            rotation = if (expanded) 180f else 0f
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            contentDescription = activity.getString(
+                if (expanded) R.string.history_collapse_date else R.string.history_expand_date,
+                dateText
+            )
+        }
         val header = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(12.dp(), 12.dp(), 12.dp(), 12.dp())
-            background = ColorDrawable(if (isDarkTheme()) Color.parseColor("#1F2937") else Color.WHITE)
+            setPadding(14.dp(), 12.dp(), 10.dp(), 12.dp())
+            background = GradientDrawable().apply {
+                cornerRadius = 12.dp().toFloat()
+                setColor(if (isDarkTheme()) Color.parseColor("#1F2937") else Color.WHITE)
+            }
             isClickable = true
             isFocusable = true
             contentDescription = activity.getString(
@@ -112,7 +124,7 @@ class MealHistoryRenderer(
                 15f,
                 true
             ), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            addView(indicator)
+            addView(indicator, LinearLayout.LayoutParams(24.dp(), 24.dp()))
         }
         return header to indicator
     }
@@ -123,7 +135,10 @@ class MealHistoryRenderer(
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(10.dp(), 10.dp(), 8.dp(), 10.dp())
-            background = ColorDrawable(if (isDarkTheme()) Color.parseColor("#1F2937") else Color.WHITE)
+            background = GradientDrawable().apply {
+                cornerRadius = 12.dp().toFloat()
+                setColor(if (isDarkTheme()) Color.parseColor("#1F2937") else Color.WHITE)
+            }
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -153,9 +168,10 @@ class MealHistoryRenderer(
             setOnClickListener { onPhotoClick(photo) }
 
             addView(ImageButton(activity).apply {
-                setImageResource(android.R.drawable.ic_menu_delete)
+                setImageResource(R.drawable.ic_delete_24)
                 contentDescription = activity.getString(R.string.history_delete)
-                background = ColorDrawable(Color.TRANSPARENT)
+                background = null
+                setColorFilter(if (isDarkTheme()) Color.parseColor("#D1D5DB") else Color.parseColor("#697586"))
                 setOnClickListener { onDeletePhoto(photo.id) }
             }, LinearLayout.LayoutParams(44.dp(), 44.dp()))
         }
