@@ -2,6 +2,7 @@ package com.example.caloriecounter.reminders
 
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.text.InputType
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
@@ -52,9 +53,8 @@ class MealReminderSettingsRenderer(
 
         val settings = settingsStore.load()
         val reminderSwitch = Switch(activity).apply {
-            text = activity.getString(R.string.settings_notifications)
             isChecked = settings.enabled
-            setTextColor(if (isDarkTheme()) Color.WHITE else Color.parseColor("#1C2430"))
+            contentDescription = activity.getString(R.string.settings_notifications)
             val checkedColor = Color.parseColor("#1E654C")
             val uncheckedColor = if (isDarkTheme()) Color.parseColor("#788579") else Color.parseColor("#AAB7AE")
             val tintStates = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
@@ -70,7 +70,28 @@ class MealReminderSettingsRenderer(
         reminderSwitch.setOnCheckedChangeListener { _, checked ->
             onToggleChanged(reminderSwitch, checked)
         }
-        content.addView(reminderSwitch)
+
+        val cardBackground = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 12.dp().toFloat()
+            setColor(if (isDarkTheme()) Color.parseColor("#1F2937") else Color.WHITE)
+            setStroke(1.dp(), if (isDarkTheme()) Color.parseColor("#52637A") else Color.parseColor("#B8D6C4"))
+        }
+
+        val notificationCard = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(16.dp(), 12.dp(), 12.dp(), 12.dp())
+            background = cardBackground
+            addView(TextView(activity).apply {
+                text = activity.getString(R.string.settings_notifications)
+                textSize = 16f
+                setTextColor(if (isDarkTheme()) Color.parseColor("#F3F4F6") else Color.parseColor("#1C2430"))
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            addView(reminderSwitch)
+        }
+        content.addView(notificationCard)
 
         val options = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
@@ -131,7 +152,7 @@ class MealReminderSettingsRenderer(
     fun createMealCountDropdown(
         initialCount: Int,
         onSelection: ((Int) -> Unit)? = null
-    ): Pair<TextInputLayout, () -> Int> {
+    ): Pair<View, () -> Int> {
         var selectedCount = initialCount.coerceIn(
             ReminderTimeCalculator.MIN_MEALS,
             ReminderTimeCalculator.MAX_MEALS
@@ -141,8 +162,28 @@ class MealReminderSettingsRenderer(
         val fieldHint = if (isDarkTheme()) Color.parseColor("#D1D5DB") else Color.parseColor("#58677A")
         val fieldStroke = if (isDarkTheme()) Color.parseColor("#52637A") else Color.parseColor("#B8D6C4")
 
+        val cardContainer = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(16.dp(), 10.dp(), 12.dp(), 10.dp())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 12.dp().toFloat()
+                setColor(fieldBackground)
+                setStroke(1.dp(), fieldStroke)
+            }
+        }
+
+        val titleTv = TextView(activity).apply {
+            text = activity.getString(R.string.reminder_meal_count_title)
+            textSize = 16f
+            setTextColor(textColor)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = 8.dp()
+            }
+        }
+
         val layout = TextInputLayout(activity).apply {
-            hint = activity.getString(R.string.reminder_meal_count_title)
             boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
             setBoxBackgroundColor(fieldBackground)
             boxStrokeColor = fieldStroke
@@ -151,23 +192,18 @@ class MealReminderSettingsRenderer(
             defaultHintTextColor = ColorStateList.valueOf(fieldHint)
             endIconMode = TextInputLayout.END_ICON_DROPDOWN_MENU
             setEndIconTintList(ColorStateList.valueOf(fieldHint))
+            layoutParams = LinearLayout.LayoutParams(
+                95.dp(),
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
         }
 
         val mealCounts = (ReminderTimeCalculator.MIN_MEALS..ReminderTimeCalculator.MAX_MEALS)
             .map(Int::toString)
 
-        val dropdownAdapter = object : ArrayAdapter<String>(activity, android.R.layout.simple_spinner_dropdown_item, mealCounts) {
+        val dropdownAdapter = object : ArrayAdapter<String>(activity, android.R.layout.simple_list_item_1, mealCounts) {
             override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
                 val v = super.getView(position, convertView, parent)
-                (v as? TextView)?.apply {
-                    setTextColor(textColor)
-                    setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16f)
-                }
-                return v
-            }
-
-            override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
-                val v = super.getDropDownView(position, convertView, parent)
                 (v as? TextView)?.apply {
                     setTextColor(textColor)
                     setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f)
@@ -178,11 +214,12 @@ class MealReminderSettingsRenderer(
         }
 
         layout.addView(MaterialAutoCompleteTextView(activity).apply {
+            inputType = InputType.TYPE_NULL
             setAdapter(dropdownAdapter)
             setText(selectedCount.toString(), false)
             setTextColor(textColor)
             setTextSize(16f)
-            setPadding(12.dp(), 16.dp(), 12.dp(), 16.dp())
+            setPadding(12.dp(), 12.dp(), 6.dp(), 12.dp())
             background = null
             setDropDownBackgroundDrawable(android.graphics.drawable.GradientDrawable().apply {
                 cornerRadius = 12.dp().toFloat()
@@ -191,12 +228,17 @@ class MealReminderSettingsRenderer(
             })
             keyListener = null
             isFocusable = false
+            setOnClickListener { showDropDown() }
             setOnItemClickListener { _, _, position, _ ->
                 selectedCount = ReminderTimeCalculator.MIN_MEALS + position
                 onSelection?.invoke(selectedCount)
             }
         })
-        return layout to { selectedCount }
+
+        cardContainer.addView(titleTv)
+        cardContainer.addView(layout)
+
+        return cardContainer to { selectedCount }
     }
 
     private fun reminderButtonLayoutParams() = LinearLayout.LayoutParams(

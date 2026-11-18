@@ -107,7 +107,7 @@
     <string name="activity_type_run">Bieg</string>
     <string name="activity_start">Rozpocznij aktywność</string>
     <string name="activity_stop">Zakończ</string>
-    <string name="activity_steps_template">%1$d kroków</string>
+    <string name="activity_steps_template">kroków %1$d</string>
     <string name="activity_metrics_template">%1$d kroków · %2$.1f km\n%3$s · %4$d kcal</string>
     <string name="activity_history">Ostatnie aktywności</string>
     <string name="activity_history_open">Otwórz trasę</string>

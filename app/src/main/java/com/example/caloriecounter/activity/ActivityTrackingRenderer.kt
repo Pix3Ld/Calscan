@@ -47,7 +47,10 @@ class ActivityTrackingRenderer(
 ) {
     private var mapView: MapView? = null
     private var myLocationOverlay: MyLocationNewOverlay? = null
-    private var metricsView: TextView? = null
+    private var stepsView: TextView? = null
+    private var distanceView: TextView? = null
+    private var timeView: TextView? = null
+    private var caloriesView: TextView? = null
     private var statusView: TextView? = null
     private var startButton: MaterialButton? = null
     private var stopButton: MaterialButton? = null
@@ -144,7 +147,11 @@ class ActivityTrackingRenderer(
             }
         }
 
-        headerRow.addView(backBtn, LinearLayout.LayoutParams(0, 48.dp(), 1f))
+        headerRow.addView(backBtn, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            42.dp()
+        ))
+        headerRow.addView(View(activity), LinearLayout.LayoutParams(0, 0, 1f))
         headerRow.addView(deleteBtn, LinearLayout.LayoutParams(44.dp(), 44.dp()))
         content.addView(headerRow)
 
@@ -159,43 +166,75 @@ class ActivityTrackingRenderer(
             activity.getString(R.string.activity_history_date, type, date),
             20f,
             true
-        ))
-        content.addView(pageText(
-            activity.getString(
-                R.string.activity_session_template,
-                formatDuration(session.durationSeconds),
-                session.distanceMeters / 1_000.0,
-                session.caloriesKcal
-            ),
-            16f,
-            false
-        ).apply { setPadding(0, 8.dp(), 0, 4.dp()) })
-        content.addView(pageText(
-            activity.getString(R.string.activity_steps_template, session.steps),
-            15f,
-            false
-        ).apply { setPadding(0, 0, 0, 12.dp()) })
+        ).apply { setPadding(0, 0, 0, 8.dp()) })
 
         val route = decodeRoute(session.routeJson)
         if (route.isEmpty()) {
-            content.addView(pageText(activity.getString(R.string.activity_route_empty), 14f, false))
+            content.addView(pageText(activity.getString(R.string.activity_route_empty), 14f, false).apply {
+                setPadding(0, 8.dp(), 0, 8.dp())
+            })
         } else {
             content.addView(buildMap(heightDp = 380))
             drawRoute(route, centerOnFirstPoint = false)
             fitMapToRoute(route)
         }
+
+        val telemetryCard = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(14.dp(), 12.dp(), 14.dp(), 12.dp())
+            background = GradientDrawable().apply {
+                cornerRadius = 12.dp().toFloat()
+                setColor(if (isDarkTheme()) Color.parseColor("#1F2937") else Color.WHITE)
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 12.dp() }
+        }
+        val tRow1 = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
+        val stepsTv = pageText(activity.getString(R.string.activity_steps_template, session.steps), 16f, true).apply {
+            gravity = android.view.Gravity.CENTER
+        }
+        val distTv = pageText(String.format(Locale.getDefault(), "%.2f km", session.distanceMeters / 1_000.0), 16f, true).apply {
+            gravity = android.view.Gravity.CENTER
+        }
+        tRow1.addView(stepsTv, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        tRow1.addView(distTv, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+
+        val tRow2 = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 6.dp() }
+        }
+        val timeTv = pageText(formatDuration(session.durationSeconds), 16f, true).apply {
+            gravity = android.view.Gravity.CENTER
+        }
+        val calTv = pageText(String.format(Locale.getDefault(), "%d kcal", session.caloriesKcal), 16f, true).apply {
+            gravity = android.view.Gravity.CENTER
+        }
+        tRow2.addView(timeTv, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        tRow2.addView(calTv, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+
+        telemetryCard.addView(tRow1)
+        telemetryCard.addView(tRow2)
+        content.addView(telemetryCard)
     }
 
     /** Odświeża metryki, przyciski i trasę bez przebudowy całej strony. */
     fun update(snapshot: ActivitySnapshot, sessions: List<ActivitySessionEntity>) {
         lastSnapshot = snapshot
-        metricsView?.text = activity.getString(
-            R.string.activity_metrics_template,
-            snapshot.steps,
-            snapshot.distanceMeters / 1_000.0,
-            formatDuration(snapshot.elapsedSeconds),
-            snapshot.caloriesKcal
-        )
+        stepsView?.text = activity.getString(R.string.activity_steps_template, snapshot.steps)
+        distanceView?.text = String.format(Locale.getDefault(), "%.1f km", snapshot.distanceMeters / 1_000.0)
+        timeView?.text = formatDuration(snapshot.elapsedSeconds)
+        caloriesView?.text = String.format(Locale.getDefault(), "%d kcal", snapshot.caloriesKcal)
         startButton?.visibility = if (snapshot.isTracking) View.GONE else View.VISIBLE
         stopButton?.visibility = if (snapshot.isTracking) View.VISIBLE else View.GONE
         updateActivityTypeTabs()
@@ -334,9 +373,10 @@ class ActivityTrackingRenderer(
         }
     }
 
-    // Jedno pole pokazuje kroki, dystans, czas i szacowane kalorie.
-    private fun buildMetrics(): TextView {
-        metricsView = pageText("", 16f, true).apply {
+    // Dwa wiersze pokazują kroki, dystans, czas i szacowane kalorie w dwoch wyrównanych kolumnach.
+    private fun buildMetrics(): View {
+        val container = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
             setPadding(14.dp(), 12.dp(), 14.dp(), 12.dp())
             background = GradientDrawable().apply {
                 cornerRadius = 12.dp().toFloat()
@@ -347,7 +387,48 @@ class ActivityTrackingRenderer(
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = 8.dp() }
         }
-        return metricsView!!
+
+        val row1 = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
+        val stepsTv = pageText("", 16f, true).apply {
+            gravity = android.view.Gravity.CENTER
+        }
+        val distanceTv = pageText("", 16f, true).apply {
+            gravity = android.view.Gravity.CENTER
+        }
+        row1.addView(stepsTv, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row1.addView(distanceTv, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+
+        val row2 = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 6.dp() }
+        }
+        val timeTv = pageText("", 16f, true).apply {
+            gravity = android.view.Gravity.CENTER
+        }
+        val caloriesTv = pageText("", 16f, true).apply {
+            gravity = android.view.Gravity.CENTER
+        }
+        row2.addView(timeTv, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row2.addView(caloriesTv, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+
+        container.addView(row1)
+        container.addView(row2)
+
+        stepsView = stepsTv
+        distanceView = distanceTv
+        timeView = timeTv
+        caloriesView = caloriesTv
+
+        return container
     }
 
     // Konfiguruje mapę OpenStreetMap, która wyświetla bieżącą pozycję i przebytą trasę.

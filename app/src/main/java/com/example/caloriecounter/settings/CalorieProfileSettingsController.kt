@@ -68,6 +68,73 @@ class CalorieProfileSettingsController(
             addView(smartSwitch)
         }, fieldLayoutParams())
 
+        val activityLevels = listOf(
+            R.string.profile_activity_sedentary,
+            R.string.profile_activity_light,
+            R.string.profile_activity_moderate,
+            R.string.profile_activity_high,
+            R.string.profile_activity_very_high
+        ).map { activity.getString(it) }
+        var selectedActivityLevel = profile.activityLevel.coerceIn(0, activityLevels.lastIndex)
+
+        val activityLevelLayout = TextInputLayout(activity).apply {
+            boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+            setBoxBackgroundColor(fieldBackgroundColor())
+            boxStrokeColor = fieldStrokeColor()
+            boxStrokeWidth = 1.dp()
+            boxStrokeWidthFocused = 2.dp()
+            defaultHintTextColor = ColorStateList.valueOf(secondaryTextColor())
+            endIconMode = TextInputLayout.END_ICON_DROPDOWN_MENU
+            setEndIconTintList(ColorStateList.valueOf(secondaryTextColor()))
+            layoutParams = LinearLayout.LayoutParams(
+                165.dp(),
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        val dropdownAdapter = object : ArrayAdapter<String>(activity, android.R.layout.simple_list_item_1, activityLevels) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val v = super.getView(position, convertView, parent)
+                (v as? TextView)?.apply {
+                    setTextColor(primaryTextColor())
+                    setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f)
+                    setPadding(16.dp(), 12.dp(), 16.dp(), 12.dp())
+                }
+                return v
+            }
+        }
+
+        activityLevelLayout.addView(MaterialAutoCompleteTextView(activity).apply {
+            inputType = InputType.TYPE_NULL
+            setAdapter(dropdownAdapter)
+            setText(activityLevels[selectedActivityLevel], false)
+            setTextColor(primaryTextColor())
+            setTextSize(14f)
+            setPadding(10.dp(), 12.dp(), 6.dp(), 12.dp())
+            background = null
+            setDropDownBackgroundDrawable(surfaceBackground())
+            keyListener = null
+            isFocusable = false
+            setOnClickListener { showDropDown() }
+            setOnItemClickListener { _, _, position, _ -> selectedActivityLevel = position }
+        })
+
+        val activityCard = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(16.dp(), 10.dp(), 12.dp(), 10.dp())
+            background = surfaceBackground()
+            addView(LinearLayout(activity).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginEnd = 8.dp()
+                }
+                addView(pageText(activity.getString(R.string.profile_activity_label), 16f, true))
+            })
+            addView(activityLevelLayout)
+        }
+        container.addView(activityCard, fieldLayoutParams())
+
         val weight = buildNumberField(
             R.string.profile_weight_label,
             profile.weightKg.takeIf { it > 0f }?.toString()?.removeSuffix(".0") ?: "",
@@ -108,62 +175,6 @@ class CalorieProfileSettingsController(
         sexGroup.setOnCheckedChangeListener { _, _ -> sexError.visibility = View.GONE }
         container.addView(sexGroup)
         container.addView(sexError)
-
-        container.addView(pageText(activity.getString(R.string.profile_activity_label), 15f, true).apply {
-            setPadding(0, 18.dp(), 0, 4.dp())
-        })
-        val activityLevels = listOf(
-            R.string.profile_activity_sedentary,
-            R.string.profile_activity_light,
-            R.string.profile_activity_moderate,
-            R.string.profile_activity_high,
-            R.string.profile_activity_very_high
-        ).map { activity.getString(it) }
-        var selectedActivityLevel = profile.activityLevel.coerceIn(0, activityLevels.lastIndex)
-        val activityLevelLayout = TextInputLayout(activity).apply {
-            hint = activity.getString(R.string.profile_activity_label)
-            boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
-            setBoxBackgroundColor(fieldBackgroundColor())
-            boxStrokeColor = fieldStrokeColor()
-            boxStrokeWidth = 1.dp()
-            boxStrokeWidthFocused = 2.dp()
-            defaultHintTextColor = ColorStateList.valueOf(secondaryTextColor())
-            endIconMode = TextInputLayout.END_ICON_DROPDOWN_MENU
-            setEndIconTintList(ColorStateList.valueOf(secondaryTextColor()))
-            layoutParams = fieldLayoutParams()
-        }
-        val dropdownAdapter = object : ArrayAdapter<String>(activity, android.R.layout.simple_spinner_dropdown_item, activityLevels) {
-            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-                val v = super.getView(position, convertView, parent)
-                (v as? TextView)?.apply {
-                    setTextColor(primaryTextColor())
-                    setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16f)
-                }
-                return v
-            }
-            override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
-                val v = super.getDropDownView(position, convertView, parent)
-                (v as? TextView)?.apply {
-                    setTextColor(primaryTextColor())
-                    setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f)
-                    setPadding(16.dp(), 12.dp(), 16.dp(), 12.dp())
-                }
-                return v
-            }
-        }
-        activityLevelLayout.addView(MaterialAutoCompleteTextView(activity).apply {
-            setAdapter(dropdownAdapter)
-            setText(activityLevels[selectedActivityLevel], false)
-            setTextColor(primaryTextColor())
-            setTextSize(16f)
-            setPadding(12.dp(), 12.dp(), 12.dp(), 10.dp())
-            background = null
-            setDropDownBackgroundDrawable(surfaceBackground())
-            keyListener = null
-            isFocusable = false
-            setOnItemClickListener { _, _, position, _ -> selectedActivityLevel = position }
-        })
-        container.addView(activityLevelLayout)
 
         container.addView(styledButton(activity.getString(R.string.profile_save), true).apply {
             layoutParams = LinearLayout.LayoutParams(
